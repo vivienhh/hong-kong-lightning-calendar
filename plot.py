@@ -4,20 +4,21 @@
 # ///
 
 """
-Read the lightning file in data/, inspect the values, make one picture,
-and save it to out/.
+Explore Hong Kong lightning data as a year-by-day heatmap.
 
 Run:
 uv run plot.py
 """
 
 import csv
+import datetime as dt
+import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 
 FILE = "daily_HK_LGTG_ALL.csv"
-PICTURE = "lightning-first-plot.png"
+PICTURE = "lightning-heatmap-log.png"
 
 HERE = Path(__file__).parent
 DATA = HERE / "data" / FILE
@@ -41,31 +42,66 @@ def main():
 
     print(f"{DATA.name}: {len(table)} rows")
     print(f"first row: {table[0]}")
-    print(f"first lightning value: {table[0][3]}")
-    print(f"type before conversion: {type(table[0][3])}")
 
-    days = []
+    years = sorted({int(row[0]) for row in table})
+
+    # One row per year, one column per day of year.
+    # NaN means that no value exists for that date.
+    matrix = [
+        [math.nan for _ in range(366)]
+        for _ in years
+    ]
+
+    year_index = {
+        year: i
+        for i, year in enumerate(years)
+    }
+
     values = []
 
-    for i, (year, month, day, value, quality) in enumerate(table):
+    for year, month, day, value, quality in table:
         if value == "***":
             continue
 
-        days.append(i + 1)
-        values.append(float(value))
+        year = int(year)
+        month = int(month)
+        day = int(day)
+        count = float(value)
 
-    print(f"type after conversion: {type(values[0])}")
-    print(f"{len(values)} values")
+        date = dt.date(year, month, day)
+        day_of_year = date.timetuple().tm_yday
+
+        matrix[year_index[year]][day_of_year - 1] = math.log1p(count)
+        values.append(count)
+
+    print(f"years: {years[0]} to {years[-1]}")
+    print(f"{len(values)} lightning values")
     print(f"minimum: {min(values)}")
     print(f"maximum: {max(values)}")
 
-    fig, ax = plt.subplots(figsize=(12, 4))
+    fig, ax = plt.subplots(figsize=(13, 7))
 
-    ax.plot(days, values, linewidth=1)
+    image = ax.imshow(
+        matrix,
+        aspect="auto",
+        interpolation="nearest"
+    )
 
-    ax.set_xlabel("day since records began")
-    ax.set_ylabel("daily cloud-to-ground lightning count")
-    ax.set_title("Hong Kong Daily Cloud-to-Ground Lightning")
+    ax.set_xlabel("day of year")
+    ax.set_ylabel("year")
+    ax.set_title("Hong Kong Cloud-to-Ground Lightning, 2005–2026")
+
+    ax.set_yticks(range(len(years)))
+    ax.set_yticklabels(years)
+
+    ax.set_xticks([0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334])
+    ax.set_xticklabels(
+        ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    )
+
+    colourbar = fig.colorbar(image, ax=ax)
+    colourbar.set_label("log(1 + daily lightning count)")
 
     fig.tight_layout()
 
