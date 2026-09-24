@@ -4,12 +4,13 @@
 # ///
 
 """
-Explore Hong Kong lightning data as a year-by-day heatmap.
+Explore Hong Kong lightning data as a radial calendar.
 
 Run:
 uv run plot.py
 """
 
+import calendar
 import csv
 import datetime as dt
 import math
@@ -17,8 +18,9 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
+
 FILE = "daily_HK_LGTG_ALL.csv"
-PICTURE = "lightning-heatmap-log.png"
+PICTURE = "lightning-radial-2025.png"
 
 HERE = Path(__file__).parent
 DATA = HERE / "data" / FILE
@@ -37,25 +39,25 @@ def rows(path):
     return kept
 
 
+def day_to_angle(day_of_year, year):
+    """Turn a day of the year into an angle around a full circle."""
+    days_in_year = 366 if calendar.isleap(year) else 365
+    return 2 * math.pi * (day_of_year - 1) / days_in_year
+
+
 def main():
     table = rows(DATA)
+
+    # Test the transformation from day-of-year to angle.
+    print(f"2025 day 1 -> angle {day_to_angle(1, 2025)}")
+    print(f"2025 day 183 -> angle {day_to_angle(183, 2025)}")
+    print(f"2025 day 365 -> angle {day_to_angle(365, 2025)}")
+    print(f"2024 day 366 -> angle {day_to_angle(366, 2024)}")
 
     print(f"{DATA.name}: {len(table)} rows")
     print(f"first row: {table[0]}")
 
     years = sorted({int(row[0]) for row in table})
-
-    # One row per year, one column per day of year.
-    # NaN means that no value exists for that date.
-    matrix = [
-        [math.nan for _ in range(366)]
-        for _ in years
-    ]
-
-    year_index = {
-        year: i
-        for i, year in enumerate(years)
-    }
 
     values = []
 
@@ -63,7 +65,21 @@ def main():
         if value == "***":
             continue
 
+        count = float(value)
+        values.append(count)
+
+    radial_angles = []
+    radial_values = []
+
+    for year, month, day, value, quality in table:
+        if value == "***":
+            continue
+
         year = int(year)
+
+        if year != 2025:
+            continue
+
         month = int(month)
         day = int(day)
         count = float(value)
@@ -71,37 +87,38 @@ def main():
         date = dt.date(year, month, day)
         day_of_year = date.timetuple().tm_yday
 
-        matrix[year_index[year]][day_of_year - 1] = math.log1p(count)
-        values.append(count)
+        radial_angles.append(day_to_angle(day_of_year, year))
+        radial_values.append(math.log1p(count))
 
     print(f"years: {years[0]} to {years[-1]}")
     print(f"{len(values)} lightning values")
     print(f"minimum: {min(values)}")
     print(f"maximum: {max(values)}")
 
-    fig, ax = plt.subplots(figsize=(13, 7))
+    print(f"2025 radial points: {len(radial_angles)}")
+    print(f"first radial angle: {radial_angles[0]}")
+    print(f"first radial value: {radial_values[0]}")
 
-    image = ax.imshow(
-        matrix,
-        aspect="auto",
-        interpolation="nearest"
+    fig, ax = plt.subplots(
+        figsize=(8, 8),
+        subplot_kw={"projection": "polar"}
     )
 
-    ax.set_xlabel("day of year")
-    ax.set_ylabel("year")
-    ax.set_title("Hong Kong Cloud-to-Ground Lightning, 2005–2026")
+    # Put January at the top and move clockwise through the year.
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
 
-    ax.set_yticks(range(len(years)))
-    ax.set_yticklabels(years)
+    bar_width = 2 * math.pi / 365
 
-    ax.set_xticks([0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334])
-    ax.set_xticklabels(
-        ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    ax.bar(
+        radial_angles,
+        radial_values,
+        width=bar_width,
+        bottom=1.0
     )
 
-    colourbar = fig.colorbar(image, ax=ax)
-    colourbar.set_label("log(1 + daily lightning count)")
+    ax.set_title("Hong Kong Lightning Calendar — 2025")
+    ax.set_yticklabels([])
 
     fig.tight_layout()
 
