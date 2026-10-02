@@ -1,18 +1,16 @@
 const LIGHTNING_DATA_PATH =
   "./data/daily_HK_LGTG_ALL.csv";
 
-const COASTLINE_PATH =
-  "./data/hong-kong-coastline.geojson";
-
 const BOUNDARY_PATH =
   "./data/hong-kong-boundary-precise.geojson";
 
 const DEFAULT_YEAR = 2025;
 
-const HK_CENTER = {
-  lng: 114.15,
-  lat: 22.34
-};
+const MONTH_NAMES = [
+  "JAN", "FEB", "MAR", "APR",
+  "MAY", "JUN", "JUL", "AUG",
+  "SEP", "OCT", "NOV", "DEC"
+];
 
 const YEAR_COLOURS = [
   "#A7DFFF",
@@ -26,45 +24,52 @@ const YEAR_COLOURS = [
 ];
 
 let lightningRecords = [];
-
-let coastlineGeoJSON = null;
 let boundaryGeoJSON = null;
 
-let coastlineCoordinatePaths = [];
+let selectedYear =
+  DEFAULT_YEAR;
 
-let selectedYear = DEFAULT_YEAR;
-let viewMode = "overview";
-
-let redrawQueued = false;
+let redrawQueued =
+  false;
 
 
 /* =========================================================
-   LOAD
+   LOAD FILES
    ========================================================= */
 
 async function loadText(path) {
-  const response = await fetch(path);
+
+  const response =
+    await fetch(path);
 
   if (!response.ok) {
+
     throw new Error(
       `Could not load ${path}: ${response.status}`
     );
+
   }
 
   return response.text();
+
 }
 
 
 async function loadJSON(path) {
-  const response = await fetch(path);
+
+  const response =
+    await fetch(path);
 
   if (!response.ok) {
+
     throw new Error(
       `Could not load ${path}: ${response.status}`
     );
+
   }
 
   return response.json();
+
 }
 
 
@@ -73,50 +78,98 @@ async function loadJSON(path) {
    ========================================================= */
 
 async function loadLightningData() {
+
   const text =
     await loadText(
       LIGHTNING_DATA_PATH
     );
 
+
   const lines =
     text
       .trim()
       .split(/\r?\n/)
-      .map(line => line.trim())
+      .map(
+        line =>
+          line.trim()
+      )
       .filter(Boolean);
+
+
+  /*
+   * HKO CSV:
+   *
+   * line 1 = Chinese title
+   * line 2 = English title
+   * line 3 = headings
+   * line 4 onwards = data
+   */
 
   lightningRecords =
     lines
       .slice(3)
-      .map(line => {
-        const [
-          year,
-          month,
-          day,
-          value,
-          completeness
-        ] = line.split(",");
+      .map(
+        line => {
 
-        return {
-          year: Number(year),
-          month: Number(month),
-          day: Number(day),
-          value: Number(value),
-          completeness:
-            completeness?.trim() || ""
-        };
-      })
-      .filter(record =>
-        Number.isFinite(record.year) &&
-        Number.isFinite(record.month) &&
-        Number.isFinite(record.day) &&
-        Number.isFinite(record.value)
+          const [
+            year,
+            month,
+            day,
+            value,
+            completeness
+          ] =
+            line.split(",");
+
+
+          return {
+
+            year:
+              Number(year),
+
+            month:
+              Number(month),
+
+            day:
+              Number(day),
+
+            value:
+              Number(value),
+
+            completeness:
+              completeness?.trim()
+              || ""
+
+          };
+
+        }
+      )
+      .filter(
+        record =>
+
+          Number.isFinite(
+            record.year
+          ) &&
+
+          Number.isFinite(
+            record.month
+          ) &&
+
+          Number.isFinite(
+            record.day
+          ) &&
+
+          Number.isFinite(
+            record.value
+          )
+
       );
+
 
   console.log(
     "Lightning records loaded:",
     lightningRecords.length
   );
+
 }
 
 
@@ -125,31 +178,39 @@ async function loadLightningData() {
    ========================================================= */
 
 function isLeapYear(year) {
+
   return (
     year % 4 === 0 &&
     year % 100 !== 0
-  ) || year % 400 === 0;
+  )
+  ||
+  year % 400 === 0;
+
 }
 
 
 function daysInYear(year) {
+
   return isLeapYear(year)
     ? 366
     : 365;
+
 }
 
 
-function getDayOfYear(
+function dayOfYear(
   year,
   month,
   day
 ) {
+
   const start =
     Date.UTC(
       year,
       0,
       1
     );
+
 
   const current =
     Date.UTC(
@@ -158,56 +219,88 @@ function getDayOfYear(
       day
     );
 
+
   return Math.floor(
-    (current - start) /
+    (
+      current -
+      start
+    )
+    /
     86400000
   );
+
 }
 
 
-function getRecordsForYear(year) {
+function recordsForYear(year) {
+
   return lightningRecords
-    .filter(record =>
-      record.year === year
+    .filter(
+      record =>
+        record.year === year
     )
-    .sort((a, b) =>
-      (a.month - b.month) ||
-      (a.day - b.day)
+    .sort(
+      (a, b) =>
+        (
+          a.month -
+          b.month
+        )
+        ||
+        (
+          a.day -
+          b.day
+        )
     );
+
 }
 
 
 function buildCalendarYear(year) {
+
   const calendar =
     Array.from(
       {
-        length: daysInYear(year)
+        length:
+          daysInYear(year)
       },
+
       (_, index) => ({
         index,
         record: null
       })
     );
 
-  getRecordsForYear(year)
-    .forEach(record => {
-      const index =
-        getDayOfYear(
-          record.year,
-          record.month,
-          record.day
-        );
 
-      if (
-        index >= 0 &&
-        index < calendar.length
-      ) {
-        calendar[index].record =
-          record;
+  recordsForYear(year)
+    .forEach(
+      record => {
+
+        const index =
+          dayOfYear(
+            record.year,
+            record.month,
+            record.day
+          );
+
+
+        if (
+          index >= 0 &&
+          index <
+            calendar.length
+        ) {
+
+          calendar[index]
+            .record =
+              record;
+
+        }
+
       }
-    });
+    );
+
 
   return calendar;
+
 }
 
 
@@ -216,19 +309,30 @@ function buildCalendarYear(year) {
    ========================================================= */
 
 function showYearSummary(year) {
+
   const records =
-    getRecordsForYear(year);
+    recordsForYear(year);
+
 
   if (!records.length) {
+
     return;
+
   }
+
 
   const annualTotal =
     records.reduce(
-      (sum, record) =>
-        sum + record.value,
+      (
+        sum,
+        record
+      ) =>
+        sum +
+        record.value,
+
       0
     );
+
 
   const activeDays =
     records.filter(
@@ -236,575 +340,211 @@ function showYearSummary(year) {
         record.value > 0
     ).length;
 
+
   const peakDay =
     records.reduce(
-      (highest, record) =>
+
+      (
+        highest,
+        record
+      ) =>
+
         record.value >
         highest.value
+
           ? record
           : highest,
+
       records[0]
+
     );
+
 
   console.log(
     `----- ${year} -----`
   );
+
 
   console.log(
     "Annual total:",
     annualTotal
   );
 
+
   console.log(
     "Active days:",
     activeDays
   );
+
 
   console.log(
     "Peak day:",
     `${peakDay.year}-${peakDay.month}-${peakDay.day}`
   );
 
+
   console.log(
     "Peak count:",
     peakDay.value
   );
 
+
   console.log(
     "Number of records:",
     records.length
   );
+
 }
 
 
 /* =========================================================
-   COASTLINE EXTRACTION
+   BOUNDARY → SCREEN BOUNDS
    ========================================================= */
 
-function extractLinePaths(
+function collectCoordinates(
   value,
   result = []
 ) {
+
   if (!value) {
+
     return result;
+
   }
+
 
   if (
     value.type ===
     "FeatureCollection"
   ) {
-    value.features.forEach(
-      feature =>
-        extractLinePaths(
-          feature,
-          result
-        )
-    );
+
+    value.features
+      .forEach(
+        feature =>
+          collectCoordinates(
+            feature,
+            result
+          )
+      );
+
 
     return result;
+
   }
+
 
   if (
     value.type ===
     "Feature"
   ) {
-    return extractLinePaths(
+
+    return collectCoordinates(
       value.geometry,
       result
     );
+
   }
+
 
   if (
-    value.type ===
-    "GeometryCollection"
-  ) {
-    value.geometries.forEach(
-      geometry =>
-        extractLinePaths(
-          geometry,
-          result
-        )
-    );
-
-    return result;
-  }
-
-  if (
-    value.type ===
-    "LineString"
-  ) {
-    result.push(
-      value.coordinates
-    );
-  }
-
-  else if (
-    value.type ===
-    "MultiLineString"
-  ) {
-    value.coordinates
-      .forEach(
-        line =>
-          result.push(line)
-      );
-  }
-
-  else if (
     value.type ===
     "Polygon"
   ) {
+
     value.coordinates
       .forEach(
         ring =>
-          result.push(ring)
+          ring.forEach(
+            coordinate =>
+              result.push(
+                coordinate
+              )
+          )
       );
+
   }
+
 
   else if (
     value.type ===
     "MultiPolygon"
   ) {
+
     value.coordinates
       .forEach(
         polygon =>
           polygon.forEach(
             ring =>
-              result.push(ring)
+              ring.forEach(
+                coordinate =>
+                  result.push(
+                    coordinate
+                  )
+              )
           )
       );
+
   }
 
+
   return result;
+
 }
 
 
-/*
- * Reduce extremely dense coastline paths once.
- * This keeps the true coastline geometry but
- * makes animation much smoother.
- */
+function getProjectedHongKongBounds() {
 
-function prepareCoastlinePaths() {
-  const raw =
-    extractLinePaths(
-      coastlineGeoJSON
+  const coordinates =
+    collectCoordinates(
+      boundaryGeoJSON
     );
 
-  coastlineCoordinatePaths =
-    raw
-      .map(path => {
-        const step =
-          Math.max(
-            1,
-            Math.ceil(
-              path.length / 650
-            )
-          );
-
-        const sampled = [];
-
-        for (
-          let i = 0;
-          i < path.length;
-          i += step
-        ) {
-          sampled.push(
-            path[i]
-          );
-        }
-
-        if (
-          path.length > 1
-        ) {
-          sampled.push(
-            path[
-              path.length - 1
-            ]
-          );
-        }
-
-        return sampled;
-      })
-      .filter(
-        path =>
-          path.length > 1
-      );
-}
-
-
-/* =========================================================
-   PROJECT COASTLINE
-   ========================================================= */
-
-function projectCoastlinePaths() {
-  const centre =
-    map.project(
-      HK_CENTER
-    );
 
   const projected =
-    coastlineCoordinatePaths
-      .map(path =>
-        path.map(
-          ([lng, lat]) => {
-            const point =
-              map.project({
-                lng,
-                lat
-              });
-
-            return {
-              x: point.x,
-              y: point.y
-            };
-          }
-        )
-      );
-
-  /*
-   * Sort coastline fragments clockwise
-   * around Hong Kong.
-   *
-   * This keeps the 365-day sequence
-   * visually moving around the territory.
-   */
-  return projected
-    .map(path => {
-      const centroid =
-        path.reduce(
-          (sum, point) => ({
-            x:
-              sum.x + point.x,
-            y:
-              sum.y + point.y
-          }),
-          {
-            x: 0,
-            y: 0
-          }
-        );
-
-      centroid.x /=
-        path.length;
-
-      centroid.y /=
-        path.length;
-
-      const angle =
-        Math.atan2(
-          centroid.y -
-          centre.y,
-          centroid.x -
-          centre.x
-        );
-
-      return {
-        path,
-        angle
-      };
-    })
-    .sort(
-      (a, b) =>
-        a.angle - b.angle
-    )
-    .map(
-      item =>
-        item.path
+    coordinates.map(
+      (
+        [
+          lng,
+          lat
+        ]
+      ) =>
+        map.project({
+          lng,
+          lat
+        })
     );
-}
 
 
-/* =========================================================
-   ARC-LENGTH SAMPLING
-   =========================================================
- *
- * This is the important change.
- *
- * We NO LONGER choose coastline positions
- * by radial angle.
- *
- * Instead, the 365 days are distributed
- * continuously along the real white
- * coastline geometry according to its
- * actual screen length.
- *
- * Therefore:
- *
- * no strange bunching,
- * no fake radial fan,
- * no ocean connection lines.
- */
-
-function pointDistance(a, b) {
-  return Math.hypot(
-    b.x - a.x,
-    b.y - a.y
-  );
-}
+  const xs =
+    projected.map(
+      point =>
+        point.x
+    );
 
 
-function buildCoastlineSegments(
-  projectedPaths
-) {
-  const segments = [];
+  const ys =
+    projected.map(
+      point =>
+        point.y
+    );
 
-  let totalLength = 0;
-
-  projectedPaths
-    .forEach(path => {
-      for (
-        let i = 0;
-        i <
-          path.length - 1;
-        i += 1
-      ) {
-        const start =
-          path[i];
-
-        const end =
-          path[i + 1];
-
-        const length =
-          pointDistance(
-            start,
-            end
-          );
-
-        if (
-          length < 0.25
-        ) {
-          continue;
-        }
-
-        segments.push({
-          start,
-          end,
-          length,
-          startDistance:
-            totalLength
-        });
-
-        totalLength +=
-          length;
-      }
-    });
 
   return {
-    segments,
-    totalLength
+
+    minX:
+      Math.min(...xs),
+
+    maxX:
+      Math.max(...xs),
+
+    minY:
+      Math.min(...ys),
+
+    maxY:
+      Math.max(...ys)
+
   };
-}
 
-
-function sampleCoastline(
-  projectedPaths,
-  count
-) {
-  const {
-    segments,
-    totalLength
-  } =
-    buildCoastlineSegments(
-      projectedPaths
-    );
-
-  if (
-    !segments.length ||
-    totalLength <= 0
-  ) {
-    return [];
-  }
-
-  const samples = [];
-
-  let segmentIndex = 0;
-
-  for (
-    let i = 0;
-    i < count;
-    i += 1
-  ) {
-    const target =
-      totalLength *
-      (
-        (i + 0.5) /
-        count
-      );
-
-    while (
-      segmentIndex <
-        segments.length - 1 &&
-      target >
-        segments[
-          segmentIndex
-        ].startDistance +
-        segments[
-          segmentIndex
-        ].length
-    ) {
-      segmentIndex += 1;
-    }
-
-    const segment =
-      segments[
-        segmentIndex
-      ];
-
-    const local =
-      Math.max(
-        0,
-        Math.min(
-          1,
-          (
-            target -
-            segment.startDistance
-          ) /
-          segment.length
-        )
-      );
-
-    samples.push({
-      x:
-        segment.start.x +
-        (
-          segment.end.x -
-          segment.start.x
-        ) *
-        local,
-
-      y:
-        segment.start.y +
-        (
-          segment.end.y -
-          segment.start.y
-        ) *
-        local
-    });
-  }
-
-  return samples;
-}
-
-
-/* =========================================================
-   BOUNDARY FOR FOCUS MASK
-   ========================================================= */
-
-function extractOuterRings(
-  value,
-  result = []
-) {
-  if (!value) {
-    return result;
-  }
-
-  if (
-    value.type ===
-    "FeatureCollection"
-  ) {
-    value.features.forEach(
-      feature =>
-        extractOuterRings(
-          feature,
-          result
-        )
-    );
-
-    return result;
-  }
-
-  if (
-    value.type ===
-    "Feature"
-  ) {
-    return extractOuterRings(
-      value.geometry,
-      result
-    );
-  }
-
-  if (
-    value.type ===
-    "Polygon"
-  ) {
-    if (
-      value.coordinates[0]
-    ) {
-      result.push(
-        value.coordinates[0]
-      );
-    }
-  }
-
-  else if (
-    value.type ===
-    "MultiPolygon"
-  ) {
-    value.coordinates
-      .forEach(
-        polygon => {
-          if (
-            polygon[0]
-          ) {
-            result.push(
-              polygon[0]
-            );
-          }
-        }
-      );
-  }
-
-  return result;
-}
-
-
-function projectedBoundaryRings() {
-  return extractOuterRings(
-    boundaryGeoJSON
-  ).map(
-    ring =>
-      ring.map(
-        ([lng, lat]) => {
-          const point =
-            map.project({
-              lng,
-              lat
-            });
-
-          return {
-            x: point.x,
-            y: point.y
-          };
-        }
-      )
-  );
-}
-
-
-function ringsToPath(rings) {
-  return rings
-    .map(ring => {
-      if (!ring.length) {
-        return "";
-      }
-
-      const [
-        first,
-        ...rest
-      ] = ring;
-
-      return (
-        `M ${first.x.toFixed(1)} ${first.y.toFixed(1)} ` +
-        rest
-          .map(
-            point =>
-              `L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
-          )
-          .join(" ") +
-        " Z"
-      );
-    })
-    .join(" ");
 }
 
 
@@ -813,31 +553,45 @@ function ringsToPath(rings) {
    ========================================================= */
 
 function hexToRgb(hex) {
+
   const clean =
     hex.replace(
       "#",
       ""
     );
 
+
   return {
+
     r:
       parseInt(
-        clean.slice(0, 2),
+        clean.slice(
+          0,
+          2
+        ),
         16
       ),
 
     g:
       parseInt(
-        clean.slice(2, 4),
+        clean.slice(
+          2,
+          4
+        ),
         16
       ),
 
     b:
       parseInt(
-        clean.slice(4, 6),
+        clean.slice(
+          4,
+          6
+        ),
         16
       )
+
   };
+
 }
 
 
@@ -846,15 +600,18 @@ function interpolateColour(
   colourB,
   amount
 ) {
+
   const a =
     hexToRgb(
       colourA
     );
 
+
   const b =
     hexToRgb(
       colourB
     );
+
 
   const r =
     Math.round(
@@ -862,9 +619,11 @@ function interpolateColour(
       (
         b.r -
         a.r
-      ) *
+      )
+      *
       amount
     );
+
 
   const g =
     Math.round(
@@ -872,9 +631,11 @@ function interpolateColour(
       (
         b.g -
         a.g
-      ) *
+      )
+      *
       amount
     );
+
 
   const blue =
     Math.round(
@@ -882,19 +643,23 @@ function interpolateColour(
       (
         b.b -
         a.b
-      ) *
+      )
+      *
       amount
     );
+
 
   return (
     `rgb(${r}, ${g}, ${blue})`
   );
+
 }
 
 
-function colourForYearPosition(
+function colourForPosition(
   position
 ) {
+
   const scaled =
     position *
     (
@@ -902,22 +667,33 @@ function colourForYearPosition(
       1
     );
 
+
   const index =
     Math.min(
+
       Math.floor(
         scaled
       ),
+
       YEAR_COLOURS.length -
       2
+
     );
 
+
   return interpolateColour(
+
     YEAR_COLOURS[index],
+
     YEAR_COLOURS[
       index + 1
     ],
-    scaled - index
+
+    scaled -
+      index
+
   );
+
 }
 
 
@@ -926,14 +702,20 @@ function colourForYearPosition(
    ========================================================= */
 
 function ensureSvg() {
+
   let svg =
-    document.getElementById(
-      "lightning-halo"
-    );
+    document
+      .getElementById(
+        "lightning-halo"
+      );
+
 
   if (svg) {
+
     return svg;
+
   }
+
 
   svg =
     document.createElementNS(
@@ -941,12 +723,15 @@ function ensureSvg() {
       "svg"
     );
 
+
   svg.id =
     "lightning-halo";
+
 
   Object.assign(
     svg.style,
     {
+
       position:
         "absolute",
 
@@ -967,19 +752,23 @@ function ensureSvg() {
 
       overflow:
         "visible"
+
     }
   );
+
 
   document.body
     .appendChild(
       svg
     );
 
+
   return svg;
+
 }
 
 
-function makeSvgLine({
+function makeLine({
   x1,
   y1,
   x2,
@@ -989,360 +778,491 @@ function makeSvgLine({
   opacity,
   dash = null
 }) {
+
   const line =
     document.createElementNS(
       "http://www.w3.org/2000/svg",
       "line"
     );
 
+
   line.setAttribute(
     "x1",
     x1
   );
+
 
   line.setAttribute(
     "y1",
     y1
   );
 
+
   line.setAttribute(
     "x2",
     x2
   );
+
 
   line.setAttribute(
     "y2",
     y2
   );
 
+
   line.setAttribute(
     "stroke",
     colour
   );
+
 
   line.setAttribute(
     "stroke-width",
     width
   );
 
+
   line.setAttribute(
     "stroke-opacity",
     opacity
   );
+
 
   line.setAttribute(
     "stroke-linecap",
     "round"
   );
 
+
   if (dash) {
+
     line.setAttribute(
       "stroke-dasharray",
       dash
     );
+
   }
 
+
   return line;
+
 }
 
 
 /* =========================================================
-   EXPLORE MODE BACKGROUND + FLOATING LAND
+   ELLIPSE
    ========================================================= */
 
-function drawExploreEnvironment(
-  svg,
-  width,
-  height
+function ellipsePoint(
+  cx,
+  cy,
+  rx,
+  ry,
+  angle
 ) {
-  if (
-    viewMode !==
-    "explore"
+
+  return {
+
+    x:
+      cx +
+      Math.cos(
+        angle
+      ) *
+      rx,
+
+    y:
+      cy +
+      Math.sin(
+        angle
+      ) *
+      ry
+
+  };
+
+}
+
+
+function ellipseArcPath(
+  cx,
+  cy,
+  rx,
+  ry,
+  startAngle,
+  endAngle
+) {
+
+  const start =
+    ellipsePoint(
+      cx,
+      cy,
+      rx,
+      ry,
+      startAngle
+    );
+
+
+  const end =
+    ellipsePoint(
+      cx,
+      cy,
+      rx,
+      ry,
+      endAngle
+    );
+
+
+  return (
+    `M ${start.x} ${start.y} ` +
+    `A ${rx} ${ry} 0 0 1 ` +
+    `${end.x} ${end.y}`
+  );
+
+}
+
+
+/* =========================================================
+   MONTH STRUCTURE
+   ========================================================= */
+
+function monthStartIndices(
+  year
+) {
+
+  const starts = [];
+
+
+  for (
+    let month = 0;
+    month < 12;
+    month += 1
   ) {
-    return;
-  }
 
-  const rings =
-    projectedBoundaryRings();
-
-  if (!rings.length) {
-    return;
-  }
-
-  const territoryPath =
-    ringsToPath(
-      rings
+    starts.push(
+      dayOfYear(
+        year,
+        month + 1,
+        1
+      )
     );
 
+  }
 
-  /*
-   * 1. Nearly black everything
-   *    outside Hong Kong.
-   */
 
-  const blackout =
-    document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "path"
-    );
-
-  blackout.setAttribute(
-    "d",
-    (
-      `M 0 0 ` +
-      `H ${width} ` +
-      `V ${height} ` +
-      `H 0 Z ` +
-      territoryPath
+  starts.push(
+    daysInYear(
+      year
     )
   );
 
-  blackout.setAttribute(
-    "fill",
-    "rgba(0, 0, 0, 0.86)"
-  );
 
-  blackout.setAttribute(
-    "fill-rule",
-    "evenodd"
-  );
+  return starts;
 
-  svg.appendChild(
-    blackout
-  );
-
-
-  /*
-   * 2. Deep shadow underneath HK.
-   */
-
-  const shadow =
-    document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "path"
-    );
-
-  shadow.setAttribute(
-    "d",
-    territoryPath
-  );
-
-  shadow.setAttribute(
-    "fill",
-    "rgba(0,0,0,0.55)"
-  );
-
-  shadow.setAttribute(
-    "stroke",
-    "#000000"
-  );
-
-  shadow.setAttribute(
-    "stroke-width",
-    "14"
-  );
-
-  shadow.setAttribute(
-    "transform",
-    "translate(0 52)"
-  );
-
-  shadow.style.filter =
-    "blur(12px)";
-
-  svg.appendChild(
-    shadow
-  );
-
-
-  /*
-   * 3. Layered thickness.
-   *
-   * These repeated silhouettes make
-   * Hong Kong look like a floating slab.
-   */
-
-  const depthOffsets =
-    [
-      46,
-      38,
-      30,
-      22,
-      14,
-      7
-    ];
-
-  depthOffsets.forEach(
-    (
-      offset,
-      index
-    ) => {
-      const depth =
-        document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "path"
-        );
-
-      depth.setAttribute(
-        "d",
-        territoryPath
-      );
-
-      depth.setAttribute(
-        "transform",
-        `translate(0 ${offset})`
-      );
-
-      depth.setAttribute(
-        "fill",
-        index < 2
-          ? "rgba(25,28,42,0.55)"
-          : "rgba(73,78,108,0.20)"
-      );
-
-      depth.setAttribute(
-        "stroke",
-        index < 3
-          ? "#59607B"
-          : "#AEB6FF"
-      );
-
-      depth.setAttribute(
-        "stroke-width",
-        index < 3
-          ? "1.4"
-          : "1.0"
-      );
-
-      depth.setAttribute(
-        "stroke-opacity",
-        String(
-          0.20 +
-          index * 0.06
-        )
-      );
-
-      svg.appendChild(
-        depth
-      );
-    }
-  );
-
-
-  /*
-   * 4. Bright top edge.
-   */
-
-  const top =
-    document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "path"
-    );
-
-  top.setAttribute(
-    "d",
-    territoryPath
-  );
-
-  top.setAttribute(
-    "fill",
-    "rgba(150,158,210,0.08)"
-  );
-
-  top.setAttribute(
-    "stroke",
-    "#E0E4FF"
-  );
-
-  top.setAttribute(
-    "stroke-width",
-    "1.15"
-  );
-
-  top.setAttribute(
-    "stroke-opacity",
-    "0.72"
-  );
-
-  top.style.filter =
-    "drop-shadow(0 0 6px rgba(174,182,255,0.35))";
-
-  svg.appendChild(
-    top
-  );
 }
 
 
 /* =========================================================
-   DATA HEIGHT SCALE
+   INTENSITY SCALE
    ========================================================= */
 
-function getIntensityScale(
+function getIntensityCap(
   calendar
 ) {
-  const positiveLogs =
+
+  const values =
     calendar
+
       .filter(
         item =>
           item.record &&
           item.record.value > 0
       )
+
       .map(
         item =>
           Math.log1p(
             item.record.value
           )
       )
+
       .sort(
         (a, b) =>
           a - b
       );
 
+
   if (
-    !positiveLogs.length
+    !values.length
   ) {
+
     return 1;
+
   }
 
+
   /*
-   * Use the 98th percentile instead
-   * of the absolute maximum.
-   *
-   * One extreme storm can therefore
-   * not flatten every other day.
+   * 98th percentile prevents
+   * one extreme storm from
+   * flattening the rest.
    */
 
   const index =
     Math.floor(
       (
-        positiveLogs.length -
+        values.length -
         1
-      ) *
+      )
+      *
       0.98
     );
 
+
   return Math.max(
-    positiveLogs[index],
+    values[index],
     1
   );
+
 }
 
 
 /* =========================================================
-   DRAW DATA CURTAIN
+   MONTH RING
    ========================================================= */
 
-function drawLightningVisual() {
+function drawMonthRing({
+  svg,
+  cx,
+  cy,
+  rx,
+  ry,
+  calendar
+}) {
+
+  const starts =
+    monthStartIndices(
+      selectedYear
+    );
+
+
+  const totalDays =
+    calendar.length;
+
+
+  for (
+    let month = 0;
+    month < 12;
+    month += 1
+  ) {
+
+    const startPosition =
+      starts[month] /
+      totalDays;
+
+
+    const endPosition =
+      starts[
+        month + 1
+      ] /
+      totalDays;
+
+
+    const startAngle =
+      -Math.PI / 2 +
+      startPosition *
+      Math.PI *
+      2;
+
+
+    const endAngle =
+      -Math.PI / 2 +
+      endPosition *
+      Math.PI *
+      2;
+
+
+    const middlePosition =
+      (
+        startPosition +
+        endPosition
+      )
+      /
+      2;
+
+
+    const middleAngle =
+      -Math.PI / 2 +
+      middlePosition *
+      Math.PI *
+      2;
+
+
+    const colour =
+      colourForPosition(
+        middlePosition
+      );
+
+
+    /*
+     * Month arc
+     */
+
+    const arc =
+      document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path"
+      );
+
+
+    arc.setAttribute(
+      "d",
+      ellipseArcPath(
+        cx,
+        cy,
+        rx,
+        ry,
+        startAngle + 0.012,
+        endAngle - 0.012
+      )
+    );
+
+
+    arc.setAttribute(
+      "fill",
+      "none"
+    );
+
+
+    arc.setAttribute(
+      "stroke",
+      colour
+    );
+
+
+    arc.setAttribute(
+      "stroke-width",
+      "1.25"
+    );
+
+
+    arc.setAttribute(
+      "stroke-opacity",
+      "0.48"
+    );
+
+
+    svg.appendChild(
+      arc
+    );
+
+
+    /*
+     * Month label
+     */
+
+    const labelPoint =
+      ellipsePoint(
+        cx,
+        cy,
+        rx + 27,
+        ry + 22,
+        middleAngle
+      );
+
+
+    const text =
+      document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "text"
+      );
+
+
+    text.setAttribute(
+      "x",
+      labelPoint.x
+    );
+
+
+    text.setAttribute(
+      "y",
+      labelPoint.y
+    );
+
+
+    text.setAttribute(
+      "fill",
+      colour
+    );
+
+
+    text.setAttribute(
+      "fill-opacity",
+      "0.80"
+    );
+
+
+    text.setAttribute(
+      "font-size",
+      "9"
+    );
+
+
+    text.setAttribute(
+      "font-family",
+      "Arial, Helvetica, sans-serif"
+    );
+
+
+    text.setAttribute(
+      "font-weight",
+      "500"
+    );
+
+
+    text.setAttribute(
+      "letter-spacing",
+      "1.35"
+    );
+
+
+    text.setAttribute(
+      "text-anchor",
+      "middle"
+    );
+
+
+    text.textContent =
+      MONTH_NAMES[
+        month
+      ];
+
+
+    svg.appendChild(
+      text
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   DRAW CALENDAR HALO
+   ========================================================= */
+
+function drawLightningHalo() {
+
   if (
-    !coastlineGeoJSON ||
     !boundaryGeoJSON ||
     lightningRecords.length === 0
   ) {
+
     return;
+
   }
+
 
   const svg =
     ensureSvg();
+
 
   svg.replaceChildren();
 
@@ -1350,11 +1270,14 @@ function drawLightningVisual() {
   const container =
     map.getContainer();
 
+
   const width =
     container.clientWidth;
 
+
   const height =
     container.clientHeight;
+
 
   svg.setAttribute(
     "viewBox",
@@ -1363,21 +1286,62 @@ function drawLightningVisual() {
 
 
   /*
-   * In Explore mode:
+   * Hong Kong remains geographic context.
    *
-   * first darken the world,
-   * then build the floating HK slab.
+   * The halo is NOT geographic.
+   * It is a separate temporal coordinate
+   * system surrounding the map.
    */
 
-  drawExploreEnvironment(
-    svg,
-    width,
-    height
-  );
+  const bounds =
+    getProjectedHongKongBounds();
 
 
-  const projectedPaths =
-    projectCoastlinePaths();
+  const hkWidth =
+    bounds.maxX -
+    bounds.minX;
+
+
+  const hkHeight =
+    bounds.maxY -
+    bounds.minY;
+
+
+  const cx =
+    (
+      bounds.minX +
+      bounds.maxX
+    )
+    /
+    2;
+
+
+  const cy =
+    (
+      bounds.minY +
+      bounds.maxY
+    )
+    /
+    2;
+
+
+  /*
+   * Organic horizontal ellipse.
+   *
+   * It loosely echoes Hong Kong's
+   * landscape orientation without
+   * copying the fragmented coastline.
+   */
+
+  const rx =
+    hkWidth / 2 +
+    76;
+
+
+  const ry =
+    hkHeight / 2 +
+    56;
+
 
   const calendar =
     buildCalendarYear(
@@ -1385,46 +1349,47 @@ function drawLightningVisual() {
     );
 
 
-  /*
-   * 365 points are sampled according
-   * to REAL coastline length.
-   *
-   * This creates the continuous ring
-   * you were asking for.
-   */
-
-  const anchors =
-    sampleCoastline(
-      projectedPaths,
-      calendar.length
-    );
-
-
   const intensityCap =
-    getIntensityScale(
+    getIntensityCap(
       calendar
     );
 
 
   /*
-   * Groups:
-   *
-   * base = faint 365-day annual curtain
-   * glow = atmospheric light
-   * core = fine dotted data line
+   * Inner month structure
    */
 
-  const baseGroup =
+  drawMonthRing({
+    svg,
+    cx,
+    cy,
+    rx,
+    ry,
+    calendar
+  });
+
+
+  /*
+   * Three visual layers:
+   *
+   * baseline = every day
+   * glow = active days
+   * core = precise data filament
+   */
+
+  const baselineGroup =
     document.createElementNS(
       "http://www.w3.org/2000/svg",
       "g"
     );
+
 
   const glowGroup =
     document.createElementNS(
       "http://www.w3.org/2000/svg",
       "g"
     );
+
 
   const coreGroup =
     document.createElementNS(
@@ -1434,13 +1399,12 @@ function drawLightningVisual() {
 
 
   glowGroup.style.filter =
-    viewMode ===
-    "explore"
-      ? "blur(2.6px)"
-      : "blur(1.8px)";
+    "blur(2px)";
+
 
   glowGroup.style.mixBlendMode =
     "screen";
+
 
   coreGroup.style.mixBlendMode =
     "screen";
@@ -1451,12 +1415,33 @@ function drawLightningVisual() {
       item,
       index
     ) => {
-      const anchor =
-        anchors[index];
 
-      if (!anchor) {
-        return;
-      }
+      const position =
+        index /
+        calendar.length;
+
+
+      /*
+       * Jan 1 begins at 12 o'clock.
+       * Time moves clockwise.
+       */
+
+      const angle =
+        -Math.PI / 2 +
+        position *
+        Math.PI *
+        2;
+
+
+      const anchor =
+        ellipsePoint(
+          cx,
+          cy,
+          rx,
+          ry,
+          angle
+        );
+
 
       const value =
         item.record
@@ -1466,18 +1451,21 @@ function drawLightningVisual() {
 
       const rawIntensity =
         value > 0
+
           ? Math.log1p(
               value
-            ) /
+            )
+            /
             intensityCap
+
           : 0;
 
 
       const intensity =
-        Math.min(
-          1,
-          Math.max(
-            0,
+        Math.max(
+          0,
+          Math.min(
+            1,
             rawIntensity
           )
         );
@@ -1486,154 +1474,179 @@ function drawLightningVisual() {
       const shaped =
         Math.pow(
           intensity,
-          0.78
+          0.76
         );
 
 
       const colour =
-        colourForYearPosition(
-          index /
-          Math.max(
-            1,
-            calendar.length - 1
-          )
+        colourForPosition(
+          position
         );
 
 
       /*
-       * IMPORTANT:
+       * Every data filament points
+       * vertically upward.
        *
-       * Both states use vertical
-       * screen-space pillars.
+       * Position = date
+       * Height = lightning count
+       * Colour = time progression
        */
 
-      const baseHeight =
-        viewMode ===
-        "explore"
-          ? 10
-          : 7;
+      const baselineHeight =
+        3.5;
 
 
       const dataHeight =
         value > 0
-          ? (
-              viewMode ===
-              "explore"
 
-                ? 22 +
-                  shaped * 190
+          ? 10 +
+            shaped *
+            102
 
-                : 12 +
-                  shaped * 92
-            )
-          : baseHeight;
-
-
-      const x =
-        anchor.x;
-
-      const y =
-        anchor.y;
+          : baselineHeight;
 
 
       /*
-       * Every day gets a faint baseline.
-       *
-       * That is what turns isolated
-       * spikes into a continuous
-       * 365-day data curtain.
+       * Faint annual baseline
        */
 
-      baseGroup.appendChild(
-        makeSvgLine({
-          x1: x,
-          y1: y,
-          x2: x,
+      baselineGroup.appendChild(
+
+        makeLine({
+
+          x1:
+            anchor.x,
+
+          y1:
+            anchor.y,
+
+          x2:
+            anchor.x,
+
           y2:
-            y - baseHeight,
+            anchor.y -
+            baselineHeight,
+
           colour,
-          width: 0.55,
+
+          width:
+            0.45,
+
           opacity:
-            viewMode ===
-            "explore"
-              ? 0.25
-              : 0.18
+            0.17
+
         })
+
       );
 
 
       /*
-       * Glow behind active days.
+       * Soft atmospheric glow
        */
 
       if (
         value > 0
       ) {
+
         glowGroup.appendChild(
-          makeSvgLine({
-            x1: x,
-            y1: y,
-            x2: x,
+
+          makeLine({
+
+            x1:
+              anchor.x,
+
+            y1:
+              anchor.y,
+
+            x2:
+              anchor.x,
+
             y2:
-              y - dataHeight,
+              anchor.y -
+              dataHeight,
+
             colour,
+
             width:
-              2.1 +
-              shaped * 1.5,
+              2.0 +
+              shaped *
+              1.3,
+
             opacity:
-              0.10 +
-              shaped * 0.30
+              0.07 +
+              shaped *
+              0.29
+
           })
+
         );
+
       }
 
 
       /*
-       * Fine dotted filament.
-       *
-       * This is closer to your
-       * reference image than the
-       * previous thick neon rods.
+       * Fine dotted filament
        */
 
       coreGroup.appendChild(
-        makeSvgLine({
-          x1: x,
-          y1: y,
-          x2: x,
+
+        makeLine({
+
+          x1:
+            anchor.x,
+
+          y1:
+            anchor.y,
+
+          x2:
+            anchor.x,
+
           y2:
-            y - dataHeight,
+            anchor.y -
+            dataHeight,
+
           colour,
+
           width:
             value > 0
-              ? 0.8
-              : 0.45,
+              ? 0.78
+              : 0.40,
+
           opacity:
             value > 0
-              ? 0.42 +
-                shaped * 0.52
-              : 0.16,
+              ? 0.38 +
+                shaped *
+                0.58
+              : 0.13,
+
           dash:
             value > 0
-              ? "1 2.3"
+              ? "1 2.15"
               : null
+
         })
+
       );
+
     }
   );
 
 
   svg.appendChild(
-    baseGroup
+    baselineGroup
   );
+
 
   svg.appendChild(
     glowGroup
   );
 
+
   svg.appendChild(
     coreGroup
   );
+
 }
 
 
@@ -1642,170 +1655,32 @@ function drawLightningVisual() {
    ========================================================= */
 
 function scheduleRedraw() {
+
   if (
     redrawQueued
   ) {
+
     return;
+
   }
 
-  redrawQueued = true;
+
+  redrawQueued =
+    true;
+
 
   requestAnimationFrame(
     () => {
-      redrawQueued = false;
 
-      drawLightningVisual();
-    }
-  );
-}
+      redrawQueued =
+        false;
 
 
-/* =========================================================
-   EXPLORE MODE
-   ========================================================= */
+      drawLightningHalo();
 
-function enterExploreMode() {
-  if (
-    viewMode ===
-    "explore"
-  ) {
-    return;
-  }
-
-  viewMode =
-    "explore";
-
-
-  /*
-   * Stronger pitch than before.
-   *
-   * This gives the floating slab
-   * much clearer perspective.
-   */
-
-  map.easeTo({
-    center: [
-      HK_CENTER.lng,
-      HK_CENTER.lat
-    ],
-
-    zoom:
-      10.35,
-
-    pitch:
-      62,
-
-    bearing:
-      -18,
-
-    duration:
-      1700,
-
-    essential:
-      true
-  });
-
-
-  scheduleRedraw();
-}
-
-
-function leaveExploreMode() {
-  viewMode =
-    "overview";
-
-  scheduleRedraw();
-}
-
-
-/* =========================================================
-   INTERACTION
-   ========================================================= */
-
-function attachInteraction() {
-  map.on(
-    "click",
-    event => {
-      if (
-        viewMode ===
-        "explore"
-      ) {
-        return;
-      }
-
-      const hits =
-        map.queryRenderedFeatures(
-          event.point,
-          {
-            layers: [
-              "hong-kong-lavender"
-            ]
-          }
-        );
-
-      if (
-        hits.length > 0
-      ) {
-        enterExploreMode();
-      }
     }
   );
 
-
-  map.on(
-    "mousemove",
-    event => {
-      if (
-        viewMode ===
-        "explore"
-      ) {
-        map.getCanvas()
-          .style.cursor =
-            "grab";
-
-        return;
-      }
-
-      const hits =
-        map.queryRenderedFeatures(
-          event.point,
-          {
-            layers: [
-              "hong-kong-lavender"
-            ]
-          }
-        );
-
-      map.getCanvas()
-        .style.cursor =
-          hits.length > 0
-            ? "pointer"
-            : "";
-    }
-  );
-
-
-  document
-    .getElementById(
-      "reset-view"
-    )
-    ?.addEventListener(
-      "click",
-      () => {
-        leaveExploreMode();
-      }
-    );
-
-
-  map.on(
-    "move",
-    scheduleRedraw
-  );
-
-  map.on(
-    "resize",
-    scheduleRedraw
-  );
 }
 
 
@@ -1814,32 +1689,24 @@ function attachInteraction() {
    ========================================================= */
 
 async function initialiseLightning() {
+
   const [
     _,
-    coastline,
     boundary
   ] =
     await Promise.all([
-      loadLightningData(),
 
-      loadJSON(
-        COASTLINE_PATH
-      ),
+      loadLightningData(),
 
       loadJSON(
         BOUNDARY_PATH
       )
+
     ]);
 
 
-  coastlineGeoJSON =
-    coastline;
-
   boundaryGeoJSON =
     boundary;
-
-
-  prepareCoastlinePaths();
 
 
   showYearSummary(
@@ -1849,37 +1716,63 @@ async function initialiseLightning() {
 
   const start =
     () => {
-      drawLightningVisual();
 
-      attachInteraction();
+      drawLightningHalo();
+
+
+      /*
+       * Keep the temporal halo
+       * centred around Hong Kong
+       * while the map moves.
+       */
+
+      map.on(
+        "move",
+        scheduleRedraw
+      );
+
+
+      map.on(
+        "resize",
+        scheduleRedraw
+      );
+
 
       console.log(
-        "Thunder Rhythm continuous coastline curtain ready."
+        "Thunder Rhythm calendar halo ready."
       );
+
     };
 
 
   if (
     map.loaded()
   ) {
+
     start();
+
   }
 
   else {
+
     map.once(
       "load",
       start
     );
+
   }
+
 }
 
 
 initialiseLightning()
   .catch(
     error => {
+
       console.error(
         "Lightning visualisation error:",
         error
       );
+
     }
   );
