@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Thunder Rhythm — Hong Kong Lightning</title>
+
+  <link
+    href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css"
+    rel="stylesheet"
+  >
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Helvetica,
+        Arial,
+        sans-serif;
+
+      background: #050609;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      background: #050609;
+    }
+
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+
+      pointer-events: none;
+      opacity: 0.065;
+
+      background-image:
+        linear-gradient(
+          rgba(255,255,255,0.20) 1px,
+          transparent 1px
+        ),
+        linear-gradient(
+          90deg,
+          rgba(255,255,255,0.20) 1px,
+          transparent 1px
+        ),
+        linear-gradient(
+          rgba(199,203,255,0.15) 1px,
+          transparent 1px
+        ),
+        linear-gradient(
+          90deg,
+          rgba(199,203,255,0.15) 1px,
+          transparent 1px
+        );
+
+      background-size:
+        190px 190px,
+        190px 190px,
+        47.5px 47.5px,
+        47.5px 47.5px;
+
+      mix-blend-mode: screen;
+    }
+
+    .title-panel {
+      position: absolute;
+      top: 28px;
+      left: 32px;
+      z-index: 10;
+
+      padding: 17px 21px;
+
+      background:
+        rgba(7, 8, 12, 0.88);
+
+      border:
+        1px solid
+        rgba(255, 255, 255, 0.14);
+
+      border-radius: 14px;
+
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    .title-panel h1 {
+      margin: 0;
+
+      color: #f8f8fb;
+
+      font-size: 25px;
+      font-weight: 650;
+      letter-spacing: 0.015em;
+    }
+
+    .title-panel p {
+      margin: 7px 0 0;
+
+      color: #b1b2bb;
+      font-size: 13px;
+    }
+
+    .reset-button {
+      position: absolute;
+      right: 30px;
+      bottom: 30px;
+      z-index: 10;
+
+      padding: 11px 17px;
+
+      border:
+        1px solid
+        rgba(255, 255, 255, 0.18);
+
+      border-radius: 999px;
+
+      background:
+        rgba(10, 11, 16, 0.90);
+
+      color: #f0f0f5;
+
+      font-size: 13px;
+
+      cursor: pointer;
+
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .reset-button:hover {
+      background:
+        rgba(38, 39, 48, 0.96);
+    }
+
+    .maplibregl-ctrl-group {
+      overflow: hidden;
+      border-radius: 10px !important;
+
+      background:
+        rgba(15, 16, 21, 0.92) !important;
+    }
+
+    .maplibregl-ctrl-group button {
+      filter: invert(1);
+    }
+
+    .maplibregl-ctrl-scale {
+      background:
+        rgba(8, 9, 13, 0.72) !important;
+
+      color: white !important;
+      border-color: white !important;
+    }
+
+    .maplibregl-ctrl-attrib {
+      background:
+        rgba(8, 9, 13, 0.78) !important;
+
+      color: #a9a9b3 !important;
+    }
+
+    .maplibregl-ctrl-attrib a {
+      color: #d3d3db !important;
+    }
+  </style>
+</head>
+
+
+<body>
+
+  <div id="map"></div>
+
+  <div class="grid-overlay"></div>
+
+  <div class="title-panel">
+    <h1>Thunder Rhythm</h1>
+
+    <p>
+      Hong Kong Lightning · 2005–2026
+    </p>
+  </div>
+
+  <button
+    id="reset-view"
+    class="reset-button"
+    type="button"
+  >
+    Reset Hong Kong View
+  </button>
+
+
+  <script
+    src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"
+  ></script>
+
+
+  <script>
+
+    const hongKongBounds = [
+      [113.82, 22.14],
+      [114.46, 22.59]
+    ];
+
+
+    const map =
+      new maplibregl.Map({
+
+        container: "map",
+
+        style:
+          "https://tiles.openfreemap.org/styles/dark",
+
+        center: [
+          114.15,
+          22.34
+        ],
+
+        zoom: 9.5,
+
+        pitch: 0,
+
+        bearing: 0,
+
+        minZoom: 8,
+
+        maxZoom: 18,
+
+        antialias: true
+      });
+
+
+    map.addControl(
+
+      new maplibregl.NavigationControl({
+        visualizePitch: true
+      }),
+
+      "top-right"
+
+    );
+
+
+    map.addControl(
+
+      new maplibregl.ScaleControl({
+        maxWidth: 120,
+        unit: "metric"
+      }),
+
+      "bottom-left"
+
+    );
+
+
+    function resetHongKongView() {
+
+      map.fitBounds(
+
+        hongKongBounds,
+
+        {
+          padding: {
+            top: 90,
+            bottom: 70,
+            left: 80,
+            right: 80
+          },
+
+          pitch: 0,
+          bearing: 0,
+          duration: 900
+        }
+
+      );
+
+    }
+
+
+    document
+      .getElementById("reset-view")
+      .addEventListener(
+        "click",
+        resetHongKongView
+      );
+
+
+    map.on(
+      "load",
+
+      () => {
+
+
+        /*
+         * ===================================
+         * BASEMAP
+         * ===================================
+         */
+
+        const baseLayers =
+          map.getStyle().layers;
+
+
+        baseLayers.forEach(
+          layer => {
+
+            const sourceLayer =
+              layer["source-layer"];
+
+
+            if (
+              layer.type === "background"
+            ) {
+
+              map.setPaintProperty(
+                layer.id,
+                "background-color",
+                "#050609"
+              );
+
+            }
+
+
+            if (
+              layer.type === "fill" &&
+              sourceLayer === "water"
+            ) {
+
+              map.setPaintProperty(
+                layer.id,
+                "fill-color",
+                "#07080B"
+              );
+
+            }
+
+
+            if (
+              layer.type === "fill" &&
+              sourceLayer === "landuse"
+            ) {
+
+              map.setPaintProperty(
+                layer.id,
+                "fill-color",
+
+                [
+                  "match",
+                  ["get", "class"],
+
+                  "residential",
+                  "#252831",
+
+                  ["commercial", "retail"],
+                  "#383C48",
+
+                  "industrial",
+                  "#30333D",
+
+                  ["school", "university", "college"],
+                  "#414653",
+
+                  "hospital",
+                  "#494E5C",
+
+                  ["stadium", "pitch", "playground"],
+                  "#343842",
+
+                  "#1D2027"
+                ]
+
+              );
+
+              map.setPaintProperty(
+                layer.id,
+                "fill-opacity",
+                0.94
+              );
+
+            }
+
+
+            if (
+              layer.type === "fill" &&
+              sourceLayer === "landcover"
+            ) {
+
+              map.setPaintProperty(
+                layer.id,
+                "fill-color",
+
+                [
+                  "match",
+                  ["get", "class"],
+
+                  ["wood", "forest"],
+                  "#101218",
+
+                  ["grass", "farmland"],
+                  "#181B21",
+
+                  "sand",
+                  "#2A2D35",
+
+                  "#15171D"
+                ]
+
+              );
+
+            }
+
+
+            if (
+              layer.type === "fill" &&
+              sourceLayer === "building"
+            ) {
+
+              map.setPaintProperty(
+                layer.id,
+                "fill-color",
+                "#4C5060"
+              );
+
+              map.setPaintProperty(
+                layer.id,
+                "fill-opacity",
+                0.78
+              );
+
+            }
+
+
+            if (
+              layer.type === "line" &&
+              sourceLayer === "transportation"
+            ) {
+
+              map.setPaintProperty(
+                layer.id,
+                "line-color",
+                "#555A65"
+              );
+
+              map.setPaintProperty(
+                layer.id,
+                "line-opacity",
+                0.62
+              );
+
+            }
+
+
+            if (
+              layer.type === "symbol"
+            ) {
+
+              try {
+
+                map.setPaintProperty(
+                  layer.id,
+                  "text-color",
+                  "#D4D6DD"
+                );
+
+                map.setPaintProperty(
+                  layer.id,
+                  "text-halo-color",
+                  "#06070A"
+                );
+
+                map.setPaintProperty(
+                  layer.id,
+                  "text-halo-width",
+                  1.25
+                );
+
+              } catch (error) {
+                // Ignore.
+              }
+
+            }
+
+          }
+        );
+
+
+        /*
+         * ===================================
+         * LAYER POSITIONS
+         * ===================================
+         */
+
+        const styleLayers =
+          map.getStyle().layers;
+
+
+        const firstRoadLayer =
+          styleLayers.find(
+            layer =>
+              layer["source-layer"] ===
+              "transportation"
+          );
+
+
+        const firstRoadLayerId =
+          firstRoadLayer
+            ? firstRoadLayer.id
+            : undefined;
+
+
+        const firstSymbolLayer =
+          styleLayers.find(
+            layer =>
+              layer.type === "symbol"
+          );
+
+
+        const firstSymbolLayerId =
+          firstSymbolLayer
+            ? firstSymbolLayer.id
+            : undefined;
+
+
+        const waterTemplate =
+          styleLayers.find(
+            layer =>
+              layer.type === "fill" &&
+              layer["source-layer"] === "water"
+          );
+
+
+        /*
+         * ===================================
+         * HK MASK
+         * ===================================
+         */
+
+        map.addSource(
+          "hong-kong-mask",
+
+          {
+            type: "geojson",
+
+            data:
+              "./data/hong-kong-boundary-precise.geojson"
+          }
+
+        );
+
+
+        map.addLayer(
+          {
+
+            id:
+              "hong-kong-lavender",
+
+            type:
+              "fill",
+
+            source:
+              "hong-kong-mask",
+
+            paint: {
+
+              "fill-color":
+                "#C7CBFF",
+
+              "fill-opacity":
+                0.14
+            }
+
+          },
+
+          firstRoadLayerId
+        );
+
+
+        /*
+         * ===================================
+         * WATER BACK OVER MASK
+         * ===================================
+         */
+
+        if (
+          waterTemplate &&
+          firstRoadLayerId
+        ) {
+
+          map.addLayer(
+            {
+
+              id:
+                "water-over-hk",
+
+              type:
+                "fill",
+
+              source:
+                waterTemplate.source,
+
+              "source-layer":
+                waterTemplate["source-layer"],
+
+              paint: {
+
+                "fill-color":
+                  "#07080B",
+
+                "fill-opacity":
+                  1
+              }
+
+            },
+
+            firstRoadLayerId
+          );
+
+        }
+
+
+        /*
+         * ===================================
+         * LOCAL ROAD DATA
+         * ===================================
+         */
+
+        map.addSource(
+          "hk-local-roads",
+
+          {
+            type: "geojson",
+
+            data:
+              "./data/hong-kong-roads-local.geojson"
+          }
+
+        );
+
+
+        /*
+         * PURPLE-BLUE URBAN GLOW
+         *
+         * This makes dense urban areas
+         * naturally brighter.
+         */
+
+        map.addLayer(
+          {
+
+            id:
+              "hk-urban-glow",
+
+            type:
+              "line",
+
+            source:
+              "hk-local-roads",
+
+            minzoom:
+              9.0,
+
+            paint: {
+
+              "line-color":
+                "#AEB6FF",
+
+              "line-opacity": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+
+                9,
+                0.07,
+
+                11,
+                0.12,
+
+                13,
+                0.18,
+
+                15,
+                0.24,
+
+                17,
+                0.30
+              ],
+
+              "line-blur":
+                1.6,
+
+              "line-width": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+
+                9,
+                0.9,
+
+                11,
+                1.3,
+
+                13,
+                1.9,
+
+                15,
+                2.7,
+
+                17,
+                3.8
+              ]
+
+            }
+
+          },
+
+          firstSymbolLayerId
+        );
+
+
+        /*
+         * WHITE LOCAL ROAD MESH
+         */
+
+        map.addLayer(
+          {
+
+            id:
+              "hk-local-road-mesh",
+
+            type:
+              "line",
+
+            source:
+              "hk-local-roads",
+
+            minzoom:
+              9.2,
+
+            paint: {
+
+              "line-color":
+                "#FFFFFF",
+
+              "line-opacity": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+
+                9.2,
+                0.07,
+
+                11,
+                0.13,
+
+                13,
+                0.22,
+
+                15,
+                0.36,
+
+                17,
+                0.52
+              ],
+
+              "line-width": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+
+                9.2,
+                0.05,
+
+                11,
+                0.11,
+
+                13,
+                0.22,
+
+                15,
+                0.42,
+
+                17,
+                0.72
+              ]
+
+            }
+
+          },
+
+          firstSymbolLayerId
+        );
+
+
+        /*
+         * ===================================
+         * MAJOR ROADS
+         * ===================================
+         */
+
+        map.addSource(
+          "hk-major-roads",
+
+          {
+            type: "geojson",
+
+            data:
+              "./data/hong-kong-roads-major.geojson"
+          }
+
+        );
+
+
+        map.addLayer(
+          {
+
+            id:
+              "hk-major-roads-white",
+
+            type:
+              "line",
+
+            source:
+              "hk-major-roads",
+
+            paint: {
+
+              "line-color":
+                "#F4F5F8",
+
+              "line-opacity":
+                0.60,
+
+              "line-width": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+
+                8,
+                0.20,
+
+                10,
+                0.36,
+
+                12,
+                0.62,
+
+                14,
+                1.0,
+
+                17,
+                1.55
+              ]
+
+            }
+
+          },
+
+          firstSymbolLayerId
+        );
+
+
+        /*
+         * ===================================
+         * CYAN TRANSPORT
+         * ===================================
+         */
+
+        map.addSource(
+          "hk-highlight-roads",
+
+          {
+            type: "geojson",
+
+            data:
+              "./data/hong-kong-roads-highlight.geojson"
+          }
+
+        );
+
+
+        /*
+         * Strong soft glow
+         */
+
+        map.addLayer(
+          {
+
+            id:
+              "hk-cyan-glow",
+
+            type:
+              "line",
+
+            source:
+              "hk-highlight-roads",
+
+            paint: {
+
+              "line-color":
+                "#63EFE4",
+
+              "line-opacity":
+                0.42,
+
+              "line-blur":
+                3.0,
+
+              "line-width": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+
+                8,
+                4,
+
+                10,
+                5,
+
+                12,
+                6.5,
+
+                14,
+                8,
+
+                17,
+                11
+              ]
+
+            }
+
+          },
+
+          firstSymbolLayerId
+        );
+
+
+        /*
+         * Bright cyan core
+         */
+
+        map.addLayer(
+          {
+
+            id:
+              "hk-cyan-core",
+
+            type:
+              "line",
+
+            source:
+              "hk-highlight-roads",
+
+            paint: {
+
+              "line-color":
+                "#63EFE4",
+
+              "line-opacity":
+                1,
+
+              "line-width": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+
+                8,
+                0.78,
+
+                10,
+                1.05,
+
+                12,
+                1.45,
+
+                14,
+                2.0,
+
+                17,
+                2.8
+              ]
+
+            }
+
+          },
+
+          firstSymbolLayerId
+        );
+
+
+        /*
+         * ===================================
+         * COASTLINE
+         * ===================================
+         */
+
+        map.addSource(
+          "hk-coastline",
+
+          {
+            type: "geojson",
+
+            data:
+              "./data/hong-kong-coastline.geojson"
+          }
+
+        );
+
+
+        map.addLayer(
+          {
+
+            id:
+              "hk-coastline-glow",
+
+            type:
+              "line",
+
+            source:
+              "hk-coastline",
+
+            paint: {
+
+              "line-color":
+                "#C7CBFF",
+
+              "line-opacity":
+                0.28,
+
+              "line-blur":
+                1.8,
+
+              "line-width": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+
+                8,
+                3,
+
+                12,
+                5,
+
+                17,
+                8
+              ]
+
+            }
+
+          },
+
+          firstSymbolLayerId
+        );
+
+
+        map.addLayer(
+          {
+
+            id:
+              "hk-coastline-white",
+
+            type:
+              "line",
+
+            source:
+              "hk-coastline",
+
+            paint: {
+
+              "line-color":
+                "#FFFFFF",
+
+              "line-opacity":
+                0.98,
+
+              "line-width": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+
+                8,
+                0.9,
+
+                10,
+                1.15,
+
+                13,
+                1.5,
+
+                16,
+                2.0,
+
+                18,
+                2.5
+              ]
+
+            }
+
+          },
+
+          firstSymbolLayerId
+        );
+
+
+        resetHongKongView();
+
+
+        console.log(
+          "Thunder Rhythm final map polish loaded."
+        );
+
+      }
+    );
+
+  </script>
+
+</body>
+</html>
