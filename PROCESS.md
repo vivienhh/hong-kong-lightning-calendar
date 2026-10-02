@@ -43,3 +43,9 @@ The day of the year is transformed into an angle around a circle, and the logari
 This prototype helped me explore a visual form that reflects the repeating annual rhythm of lightning activity.
 
 The next stage of the project is to develop the final visualisation and an interactive version that allows users to explore different years while keeping the relationship between the original data and the visual transformation clear.
+
+### Coastline-based lightning prototype
+
+I first mapped the daily lightning data as vertical data columns distributed along the edges of Hong Kong's land areas. This created a visually striking effect and connected the data closely with the geographic form of Hong Kong. However, because the coastline and land boundaries are highly fragmented, the overall timeline became difficult to read clearly. It was also hard to compare changes in lightning activity across the year.
+
+Based on this test, I decided to separate the geographic background from the temporal encoding. Hong Kong will remain as the central geographic context, while the daily lightning data will instead be arranged along a continuous halo surrounding the map. The vertical bars will then show differences in lightning intensity across the year, making both the temporal progression and changes in daily values easier to compare.
