@@ -11,8 +11,9 @@ const DEFAULT_YEAR = 2025;
 const HK_LAYER_ID = "hong-kong-lavender";
 
 const MONTH_NAMES = [
-  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+  "JAN", "FEB", "MAR", "APR",
+  "MAY", "JUN", "JUL", "AUG",
+  "SEP", "OCT", "NOV", "DEC"
 ];
 
 const YEAR_COLOURS = [
@@ -32,10 +33,6 @@ let boundaryGeoJSON = null;
 
 let selectedYear = DEFAULT_YEAR;
 let viewMode = "overview";
-let stackProgress = 0;
-
-let redrawQueued = false;
-let stackAnimationFrame = null;
 let interactionAttached = false;
 
 
@@ -103,6 +100,7 @@ async function loadLightningData() {
           month: Number(month),
           day: Number(day),
           value: Number(value),
+
           completeness:
             completeness?.trim() || ""
         };
@@ -181,25 +179,36 @@ function recordsForYear(year) {
 
 
 function buildCalendarYear(year) {
+  const totalDays =
+    daysInYear(year);
+
   const calendar =
     Array.from(
       {
-        length:
-          daysInYear(year)
+        length: totalDays
       },
-      (_, index) => ({
-        index,
-        record: null,
 
-        monthIndex:
+      (_, index) => {
+        const date =
           new Date(
             Date.UTC(
               year,
               0,
               index + 1
             )
-          ).getUTCMonth()
-      })
+          );
+
+        return {
+          index,
+          monthIndex:
+            date.getUTCMonth(),
+
+          dayOfMonth:
+            date.getUTCDate(),
+
+          record: null
+        };
+      }
     );
 
   recordsForYear(year)
@@ -217,9 +226,6 @@ function buildCalendarYear(year) {
       ) {
         calendar[index].record =
           record;
-
-        calendar[index].monthIndex =
-          record.month - 1;
       }
     });
 
@@ -227,14 +233,61 @@ function buildCalendarYear(year) {
 }
 
 
-function monthStartIndices(year) {
+/* =========================================================
+   MONTH SUMMARY
+   ========================================================= */
+
+function getMonthSummaries(
+  calendar
+) {
   return MONTH_NAMES.map(
-    (_, monthIndex) =>
-      dayOfYear(
-        year,
-        monthIndex + 1,
-        1
-      )
+    (
+      name,
+      monthIndex
+    ) => {
+      const days =
+        calendar.filter(
+          item =>
+            item.monthIndex ===
+            monthIndex
+        );
+
+      const values =
+        days.map(
+          item =>
+            item.record
+              ? item.record.value
+              : 0
+        );
+
+      const total =
+        values.reduce(
+          (sum, value) =>
+            sum + value,
+          0
+        );
+
+      const activeDays =
+        values.filter(
+          value =>
+            value > 0
+        ).length;
+
+      const startIndex =
+        days.length
+          ? days[0].index
+          : 0;
+
+      return {
+        monthIndex,
+        name,
+        total,
+        activeDays,
+        startIndex,
+        numberOfDays:
+          days.length
+      };
+    }
   );
 }
 
@@ -306,7 +359,7 @@ function showYearSummary(year) {
 
 
 /* =========================================================
-   GEOJSON
+   GEOJSON EXTRACTION
    ========================================================= */
 
 function extractLinePaths(
@@ -469,13 +522,23 @@ function extractOuterRings(
 
 
 /* =========================================================
-   PROJECT GEOMETRY
+   PROJECT TO SCREEN
    ========================================================= */
 
 function projectCoordinatePath(
   coordinates,
-  maxPoints = 420
+  maxPoints = 250
 ) {
+  /*
+   * Another important optimisation:
+   * simplify the coastline used by the
+   * temporal stack.
+   *
+   * The real geographic form remains,
+   * but unnecessary screen-level detail
+   * is removed.
+   */
+
   const step =
     Math.max(
       1,
@@ -500,23 +563,11 @@ function projectCoordinatePath(
   if (
     coordinates.length > 1
   ) {
-    const last =
+    sampled.push(
       coordinates[
         coordinates.length - 1
-      ];
-
-    const previous =
-      sampled[
-        sampled.length - 1
-      ];
-
-    if (
-      !previous ||
-      previous[0] !== last[0] ||
-      previous[1] !== last[1]
-    ) {
-      sampled.push(last);
-    }
+      ]
+    );
   }
 
   return sampled.map(
@@ -536,13 +587,14 @@ function projectCoordinatePath(
 }
 
 
-function getProjectedCoastlinePaths() {
+function projectedCoastlinePaths() {
   return extractLinePaths(
     coastlineGeoJSON
   )
     .map(path =>
       projectCoordinatePath(
-        path
+        path,
+        240
       )
     )
     .filter(
@@ -552,14 +604,14 @@ function getProjectedCoastlinePaths() {
 }
 
 
-function getProjectedBoundaryRings() {
+function projectedBoundaryRings() {
   return extractOuterRings(
     boundaryGeoJSON
   )
     .map(ring =>
       projectCoordinatePath(
         ring,
-        520
+        320
       )
     )
     .filter(
@@ -569,7 +621,7 @@ function getProjectedBoundaryRings() {
 }
 
 
-function projectedPathsToSvgPath(
+function pathsToSvgPath(
   paths,
   close = false
 ) {
@@ -604,7 +656,7 @@ function projectedPathsToSvgPath(
 }
 
 
-function getProjectedBounds(paths) {
+function projectedBounds(paths) {
   const points =
     paths.flat();
 
@@ -612,36 +664,44 @@ function getProjectedBounds(paths) {
     return null;
   }
 
-  const xs =
-    points.map(
-      point =>
-        point.x
-    );
-
-  const ys =
-    points.map(
-      point =>
-        point.y
-    );
-
   return {
     minX:
-      Math.min(...xs),
+      Math.min(
+        ...points.map(
+          point =>
+            point.x
+        )
+      ),
 
     maxX:
-      Math.max(...xs),
+      Math.max(
+        ...points.map(
+          point =>
+            point.x
+        )
+      ),
 
     minY:
-      Math.min(...ys),
+      Math.min(
+        ...points.map(
+          point =>
+            point.y
+        )
+      ),
 
     maxY:
-      Math.max(...ys)
+      Math.max(
+        ...points.map(
+          point =>
+            point.y
+        )
+      )
   };
 }
 
 
 /* =========================================================
-   COLOUR + INTENSITY
+   COLOUR
    ========================================================= */
 
 function hexToRgb(hex) {
@@ -688,34 +748,31 @@ function interpolateColour(
       colourB
     );
 
-  const r =
-    Math.round(
+  return (
+    `rgb(` +
+    `${Math.round(
       a.r +
       (b.r - a.r) *
       amount
-    );
+    )}, ` +
 
-  const g =
-    Math.round(
+    `${Math.round(
       a.g +
       (b.g - a.g) *
       amount
-    );
+    )}, ` +
 
-  const blue =
-    Math.round(
+    `${Math.round(
       a.b +
       (b.b - a.b) *
       amount
-    );
-
-  return (
-    `rgb(${r}, ${g}, ${blue})`
+    )}` +
+    `)`
   );
 }
 
 
-function colourForYearPosition(
+function colourForPosition(
   position
 ) {
   const scaled =
@@ -740,47 +797,43 @@ function colourForYearPosition(
 }
 
 
-function getIntensityCap(
-  calendar
+/* =========================================================
+   INTENSITY
+   ========================================================= */
+
+function percentileCap(
+  values,
+  percentile = 0.97
 ) {
-  const values =
-    calendar
+  const positive =
+    values
       .filter(
-        item =>
-          item.record &&
-          item.record.value > 0
+        value =>
+          value > 0
       )
       .map(
-        item =>
-          Math.log1p(
-            item.record.value
-          )
+        value =>
+          Math.log1p(value)
       )
       .sort(
         (a, b) =>
           a - b
       );
 
-  if (!values.length) {
+  if (!positive.length) {
     return 1;
   }
-
-  /*
-   * Use the 98th percentile so
-   * one extreme storm cannot
-   * flatten the whole year.
-   */
 
   const index =
     Math.floor(
       (
-        values.length - 1
+        positive.length - 1
       ) *
-      0.98
+      percentile
     );
 
   return Math.max(
-    values[index],
+    positive[index],
     1
   );
 }
@@ -788,7 +841,7 @@ function getIntensityCap(
 
 function intensityForValue(
   value,
-  intensityCap
+  cap
 ) {
   if (
     value <= 0
@@ -796,22 +849,81 @@ function intensityForValue(
     return 0;
   }
 
-  const raw =
+  return Math.min(
+    1,
     Math.log1p(value) /
-    intensityCap;
-
-  return Math.max(
-    0,
-    Math.min(
-      1,
-      raw
-    )
+    cap
   );
 }
 
 
 /* =========================================================
-   SVG
+   STACK SPACING
+   ========================================================= */
+
+function getStackLayout(
+  calendar,
+  height
+) {
+  /*
+   * Target approximately 55–65%
+   * of the map viewport.
+   */
+
+  const stackHeight =
+    Math.min(
+      480,
+      Math.max(
+        330,
+        height * 0.61
+      )
+    );
+
+  /*
+   * Bigger month gaps are intentional:
+   * the year should clearly read as
+   * twelve visual blocks.
+   */
+
+  const monthGap = 9;
+
+  const totalMonthGap =
+    monthGap * 11;
+
+  const dailySpace =
+    (
+      stackHeight -
+      totalMonthGap
+    ) /
+    Math.max(
+      1,
+      calendar.length - 1
+    );
+
+  return {
+    stackHeight,
+    monthGap,
+    dailySpace
+  };
+}
+
+
+function layerOffset(
+  item,
+  layout
+) {
+  return -(
+    item.index *
+    layout.dailySpace +
+
+    item.monthIndex *
+    layout.monthGap
+  );
+}
+
+
+/* =========================================================
+   SVG ROOT
    ========================================================= */
 
 function ensureSvg() {
@@ -824,8 +936,17 @@ function ensureSvg() {
     return svg;
   }
 
-  const container =
-    map.getContainer();
+  /*
+   * Remove legacy experimental SVG
+   * if one still exists.
+   */
+
+  document
+    .getElementById(
+      "lightning-halo"
+    )
+    ?.remove();
+
 
   svg =
     document.createElementNS(
@@ -858,204 +979,321 @@ function ensureSvg() {
         "none",
 
       overflow:
-        "visible"
+        "visible",
+
+      transition:
+        "opacity 280ms ease"
     }
   );
 
-  container.appendChild(
-    svg
-  );
+  map.getContainer()
+    .appendChild(svg);
 
   return svg;
 }
 
 
-function createSvgPath({
-  d,
-  stroke,
-  strokeWidth,
-  strokeOpacity,
-  fill = "none",
-  fillOpacity = 0,
-  transform = null,
-  filter = null
-}) {
-  const path =
-    document.createElementNS(
+function clearSvg(svg) {
+  while (
+    svg.firstChild
+  ) {
+    svg.removeChild(
+      svg.firstChild
+    );
+  }
+}
+
+
+/* =========================================================
+   SVG HELPERS
+   ========================================================= */
+
+function createSvgElement(name) {
+  return document
+    .createElementNS(
       "http://www.w3.org/2000/svg",
+      name
+    );
+}
+
+
+function createUse(
+  pathId
+) {
+  const use =
+    createSvgElement(
+      "use"
+    );
+
+  use.setAttribute(
+    "href",
+    `#${pathId}`
+  );
+
+  return use;
+}
+
+
+/* =========================================================
+   DEFINITIONS
+   ========================================================= */
+
+function buildDefinitions(
+  svg,
+  coastlinePath
+) {
+  const defs =
+    createSvgElement(
+      "defs"
+    );
+
+
+  /*
+   * THIS is the key performance change.
+   *
+   * Hong Kong's coastline exists only
+   * ONCE in the SVG document.
+   *
+   * Every day simply references it
+   * using <use>.
+   */
+
+  const outline =
+    createSvgElement(
       "path"
     );
 
-  path.setAttribute(
+  outline.id =
+    "hk-daily-outline";
+
+  outline.setAttribute(
     "d",
-    d
+    coastlinePath
   );
 
-  path.setAttribute(
+  outline.setAttribute(
     "fill",
-    fill
+    "none"
   );
 
-  path.setAttribute(
-    "fill-opacity",
-    fillOpacity
-  );
-
-  path.setAttribute(
-    "stroke",
-    stroke
-  );
-
-  path.setAttribute(
-    "stroke-width",
-    strokeWidth
-  );
-
-  path.setAttribute(
-    "stroke-opacity",
-    strokeOpacity
-  );
-
-  path.setAttribute(
+  outline.setAttribute(
     "stroke-linejoin",
     "round"
   );
 
-  path.setAttribute(
+  outline.setAttribute(
     "stroke-linecap",
     "round"
   );
 
-  path.setAttribute(
+  outline.setAttribute(
     "vector-effect",
     "non-scaling-stroke"
   );
 
-  if (transform) {
-    path.setAttribute(
-      "transform",
-      transform
-    );
-  }
-
-  if (filter) {
-    path.style.filter =
-      filter;
-  }
-
-  return path;
-}
-
-
-/* =========================================================
-   STACK SPACING
-   ========================================================= */
-
-function getStackHeight(
-  containerHeight
-) {
-  return Math.min(
-    330,
-    Math.max(
-      220,
-      containerHeight * 0.44
-    )
+  defs.appendChild(
+    outline
   );
-}
 
-
-function getMonthGap(
-  containerHeight
-) {
-  return Math.min(
-    5.5,
-    Math.max(
-      3.4,
-      containerHeight * 0.005
-    )
-  );
-}
-
-
-function layerOffsetForDay({
-  dayIndex,
-  monthIndex,
-  totalDays,
-  containerHeight
-}) {
-  const stackHeight =
-    getStackHeight(
-      containerHeight
-    );
-
-  const monthGap =
-    getMonthGap(
-      containerHeight
-    );
-
-  const totalGap =
-    monthGap * 11;
-
-  const usableHeight =
-    Math.max(
-      120,
-      stackHeight -
-      totalGap
-    );
-
-  const daySpacing =
-    usableHeight /
-    Math.max(
-      1,
-      totalDays - 1
-    );
 
   /*
-   * Jan stays nearest the base map.
-   * Dec moves highest.
+   * One shared glow filter.
+   *
+   * Only the strongest days use it.
    */
 
-  return -(
-    dayIndex *
-    daySpacing +
+  const filter =
+    createSvgElement(
+      "filter"
+    );
 
-    monthIndex *
-    monthGap
-  ) *
-  stackProgress;
+  filter.id =
+    "lightning-strong-glow";
+
+  filter.setAttribute(
+    "x",
+    "-40%"
+  );
+
+  filter.setAttribute(
+    "y",
+    "-40%"
+  );
+
+  filter.setAttribute(
+    "width",
+    "180%"
+  );
+
+  filter.setAttribute(
+    "height",
+    "180%"
+  );
+
+
+  const blur =
+    createSvgElement(
+      "feGaussianBlur"
+    );
+
+  blur.setAttribute(
+    "stdDeviation",
+    "2.2"
+  );
+
+  blur.setAttribute(
+    "result",
+    "blur"
+  );
+
+
+  const merge =
+    createSvgElement(
+      "feMerge"
+    );
+
+
+  const mergeBlur =
+    createSvgElement(
+      "feMergeNode"
+    );
+
+  mergeBlur.setAttribute(
+    "in",
+    "blur"
+  );
+
+
+  const mergeOriginal =
+    createSvgElement(
+      "feMergeNode"
+    );
+
+  mergeOriginal.setAttribute(
+    "in",
+    "SourceGraphic"
+  );
+
+
+  merge.appendChild(
+    mergeBlur
+  );
+
+  merge.appendChild(
+    mergeOriginal
+  );
+
+  filter.appendChild(
+    blur
+  );
+
+  filter.appendChild(
+    merge
+  );
+
+  defs.appendChild(
+    filter
+  );
+
+
+  svg.appendChild(
+    defs
+  );
 }
 
 
 /* =========================================================
-   EXPLORE ENVIRONMENT
+   OVERVIEW
    ========================================================= */
 
-function drawExploreEnvironment({
+function drawOverview(
+  svg
+) {
+  /*
+   * Top-down overview does NOT need
+   * 365 separate DOM objects.
+   *
+   * Visually, all 365 layers occupy
+   * the same position anyway.
+   *
+   * One luminous composite outline
+   * preserves the concept while being
+   * dramatically lighter to render.
+   */
+
+  const glow =
+    createUse(
+      "hk-daily-outline"
+    );
+
+  glow.setAttribute(
+    "stroke",
+    "#AEB6FF"
+  );
+
+  glow.setAttribute(
+    "stroke-width",
+    "6"
+  );
+
+  glow.setAttribute(
+    "stroke-opacity",
+    "0.12"
+  );
+
+  glow.setAttribute(
+    "filter",
+    "url(#lightning-strong-glow)"
+  );
+
+
+  const core =
+    createUse(
+      "hk-daily-outline"
+    );
+
+  core.setAttribute(
+    "stroke",
+    "#E2E6FF"
+  );
+
+  core.setAttribute(
+    "stroke-width",
+    "1.15"
+  );
+
+  core.setAttribute(
+    "stroke-opacity",
+    "0.78"
+  );
+
+
+  svg.appendChild(
+    glow
+  );
+
+  svg.appendChild(
+    core
+  );
+}
+
+
+/* =========================================================
+   BACKGROUND DIM + FLOATING MAP
+   ========================================================= */
+
+function drawExploreEnvironment(
   svg,
+  boundaryPath,
   width,
-  height,
-  boundaryPath
-}) {
-  if (
-    viewMode !== "explore" ||
-    stackProgress <= 0.001
-  ) {
-    return;
-  }
-
-
+  height
+) {
   /*
-   * Everything outside HK fades
-   * almost completely into black.
+   * Almost-black world outside HK.
    */
-
-  const dimOpacity =
-    0.88 *
-    stackProgress;
 
   const blackout =
-    document.createElementNS(
-      "http://www.w3.org/2000/svg",
+    createSvgElement(
       "path"
     );
 
@@ -1072,7 +1310,7 @@ function drawExploreEnvironment({
 
   blackout.setAttribute(
     "fill",
-    `rgba(0,0,0,${dimOpacity})`
+    "rgba(0,0,0,0.89)"
   );
 
   blackout.setAttribute(
@@ -1086,42 +1324,41 @@ function drawExploreEnvironment({
 
 
   /*
-   * Floating-map depth.
+   * Shadow beneath the Hong Kong slab.
    */
 
-  const depth =
-    54 *
-    stackProgress;
-
-
   const shadow =
-    createSvgPath({
-      d:
-        boundaryPath,
+    createSvgElement(
+      "path"
+    );
 
-      stroke:
-        "#000000",
+  shadow.setAttribute(
+    "d",
+    boundaryPath
+  );
 
-      strokeWidth:
-        18,
+  shadow.setAttribute(
+    "fill",
+    "rgba(0,0,0,0.52)"
+  );
 
-      strokeOpacity:
-        0.48 *
-        stackProgress,
+  shadow.setAttribute(
+    "stroke",
+    "#000000"
+  );
 
-      fill:
-        "rgba(0,0,0,0.42)",
+  shadow.setAttribute(
+    "stroke-width",
+    "16"
+  );
 
-      fillOpacity:
-        0.42 *
-        stackProgress,
+  shadow.setAttribute(
+    "transform",
+    "translate(0 55)"
+  );
 
-      transform:
-        `translate(0 ${depth + 10})`,
-
-      filter:
-        `blur(${8 * stackProgress}px)`
-    });
+  shadow.style.filter =
+    "blur(10px)";
 
   svg.appendChild(
     shadow
@@ -1129,65 +1366,71 @@ function drawExploreEnvironment({
 
 
   /*
-   * Repeated silhouettes give the
-   * Hong Kong map visible thickness.
+   * Floating slab thickness.
    */
 
-  const copies = 7;
+  const offsets =
+    [
+      48,
+      40,
+      32,
+      24,
+      16,
+      8
+    ];
 
-  for (
-    let i = copies;
-    i >= 1;
-    i -= 1
-  ) {
-    const ratio =
-      i / copies;
+  offsets.forEach(
+    (
+      offset,
+      index
+    ) => {
+      const slab =
+        createSvgElement(
+          "path"
+        );
 
-    const offset =
-      depth * ratio;
+      slab.setAttribute(
+        "d",
+        boundaryPath
+      );
 
-    const slab =
-      createSvgPath({
-        d:
-          boundaryPath,
+      slab.setAttribute(
+        "transform",
+        `translate(0 ${offset})`
+      );
 
-        stroke:
-          i <= 2
-            ? "#B8C0FF"
-            : "#555D78",
+      slab.setAttribute(
+        "fill",
+        index < 2
+          ? "rgba(18,21,34,0.44)"
+          : "rgba(86,94,132,0.08)"
+      );
 
-        strokeWidth:
-          i <= 2
-            ? 1.2
-            : 1.0,
+      slab.setAttribute(
+        "stroke",
+        index < 3
+          ? "#525A78"
+          : "#AEB6FF"
+      );
 
-        strokeOpacity:
-          (
-            0.16 +
-            (
-              1 - ratio
-            ) *
-            0.22
-          ) *
-          stackProgress,
+      slab.setAttribute(
+        "stroke-width",
+        "1"
+      );
 
-        fill:
-          i >= 5
-            ? "rgba(12,14,24,0.30)"
-            : "rgba(91,98,138,0.08)",
+      slab.setAttribute(
+        "stroke-opacity",
+        String(
+          0.16 +
+          index * 0.045
+        )
+      );
 
-        fillOpacity:
-          0.15 *
-          stackProgress,
-
-        transform:
-          `translate(0 ${offset})`
-      });
-
-    svg.appendChild(
-      slab
-    );
-  }
+      svg.appendChild(
+        slab
+      );
+    }
+  );
 
 
   /*
@@ -1195,34 +1438,34 @@ function drawExploreEnvironment({
    */
 
   const topEdge =
-    createSvgPath({
-      d:
-        boundaryPath,
+    createSvgElement(
+      "path"
+    );
 
-      stroke:
-        "#E4E7FF",
+  topEdge.setAttribute(
+    "d",
+    boundaryPath
+  );
 
-      strokeWidth:
-        1.25,
+  topEdge.setAttribute(
+    "fill",
+    "rgba(150,158,210,0.05)"
+  );
 
-      strokeOpacity:
-        0.78 *
-        stackProgress,
+  topEdge.setAttribute(
+    "stroke",
+    "#E3E7FF"
+  );
 
-      fill:
-        "rgba(147,155,214,0.08)",
+  topEdge.setAttribute(
+    "stroke-width",
+    "1.1"
+  );
 
-      fillOpacity:
-        0.08 *
-        stackProgress,
-
-      filter:
-        (
-          `drop-shadow(` +
-          `0 0 ${6 * stackProgress}px ` +
-          `rgba(174,182,255,0.55))`
-        )
-    });
+  topEdge.setAttribute(
+    "stroke-opacity",
+    "0.72"
+  );
 
   svg.appendChild(
     topEdge
@@ -1231,68 +1474,335 @@ function drawExploreEnvironment({
 
 
 /* =========================================================
-   MONTH LABELS
+   EXPLORE STACK
    ========================================================= */
 
-function drawMonthLabels({
+function drawExploreStack(
   svg,
-  bounds,
   calendar,
-  containerHeight
-}) {
-  if (
-    viewMode !== "explore" ||
-    stackProgress < 0.2
-  ) {
-    return;
-  }
-
-  const starts =
-    monthStartIndices(
-      selectedYear
+  bounds,
+  height
+) {
+  const monthSummaries =
+    getMonthSummaries(
+      calendar
     );
 
-  const labelX =
-    Math.max(
-      28,
-      bounds.minX - 48
+  const layout =
+    getStackLayout(
+      calendar,
+      height
     );
 
-  const baseY =
-    (
-      bounds.minY +
-      bounds.maxY
-    ) / 2;
+
+  const dayValues =
+    calendar.map(
+      item =>
+        item.record
+          ? item.record.value
+          : 0
+    );
 
 
-  starts.forEach(
-    (
-      dayIndex,
-      monthIndex
-    ) => {
-      const offset =
-        layerOffsetForDay({
-          dayIndex,
-          monthIndex,
-          totalDays:
-            calendar.length,
-          containerHeight
-        });
+  const dayCap =
+    percentileCap(
+      dayValues,
+      0.97
+    );
+
+
+  const monthCap =
+    percentileCap(
+      monthSummaries.map(
+        month =>
+          month.total
+      ),
+      1
+    );
+
+
+  /*
+   * Find the strongest days.
+   * Only these receive expensive glow.
+   */
+
+  const activeDays =
+    calendar
+      .filter(
+        item =>
+          item.record &&
+          item.record.value > 0
+      )
+      .sort(
+        (a, b) =>
+          b.record.value -
+          a.record.value
+      );
+
+  const glowDays =
+    new Set(
+      activeDays
+        .slice(0, 12)
+        .map(
+          item =>
+            item.index
+        )
+    );
+
+
+  /*
+   * Daily layers
+   */
+
+  const dailyGroup =
+    createSvgElement(
+      "g"
+    );
+
+  dailyGroup.style.mixBlendMode =
+    "screen";
+
+
+  calendar.forEach(
+    item => {
+      const value =
+        item.record
+          ? item.record.value
+          : 0;
+
+
+      const intensity =
+        intensityForValue(
+          value,
+          dayCap
+        );
+
 
       const colour =
-        colourForYearPosition(
-          dayIndex /
+        colourForPosition(
+          item.index /
           Math.max(
             1,
             calendar.length - 1
           )
         );
 
+
+      const offset =
+        layerOffset(
+          item,
+          layout
+        );
+
+
+      const use =
+        createUse(
+          "hk-daily-outline"
+        );
+
+
+      use.setAttribute(
+        "transform",
+        `translate(0 ${offset.toFixed(2)})`
+      );
+
+
+      /*
+       * Zero days remain technically
+       * represented but nearly disappear.
+       */
+
+      if (
+        value <= 0
+      ) {
+        use.setAttribute(
+          "stroke",
+          colour
+        );
+
+        use.setAttribute(
+          "stroke-width",
+          "0.28"
+        );
+
+        use.setAttribute(
+          "stroke-opacity",
+          "0.012"
+        );
+      }
+
+      else {
+        const shaped =
+          Math.pow(
+            intensity,
+            0.70
+          );
+
+        use.setAttribute(
+          "stroke",
+          colour
+        );
+
+        use.setAttribute(
+          "stroke-width",
+          String(
+            0.42 +
+            shaped * 1.35
+          )
+        );
+
+        use.setAttribute(
+          "stroke-opacity",
+          String(
+            0.12 +
+            shaped * 0.68
+          )
+        );
+
+
+        /*
+         * Glow only the strongest
+         * twelve days of the year.
+         */
+
+        if (
+          glowDays.has(
+            item.index
+          )
+        ) {
+          use.setAttribute(
+            "filter",
+            "url(#lightning-strong-glow)"
+          );
+        }
+      }
+
+
+      dailyGroup.appendChild(
+        use
+      );
+    }
+  );
+
+
+  svg.appendChild(
+    dailyGroup
+  );
+
+
+  /*
+   * MONTHLY SUMMARY LAYERS
+   *
+   * Each month receives one stronger
+   * Hong Kong contour.
+   *
+   * This gives the stack a readable
+   * Year → Month → Day hierarchy.
+   */
+
+  const monthlyGroup =
+    createSvgElement(
+      "g"
+    );
+
+  monthlyGroup.style.mixBlendMode =
+    "screen";
+
+
+  monthSummaries.forEach(
+    month => {
+      const firstDay =
+        calendar[
+          month.startIndex
+        ];
+
+      if (!firstDay) {
+        return;
+      }
+
+      const intensity =
+        intensityForValue(
+          month.total,
+          monthCap
+        );
+
+
+      const colour =
+        colourForPosition(
+          month.startIndex /
+          Math.max(
+            1,
+            calendar.length - 1
+          )
+        );
+
+
+      const offset =
+        layerOffset(
+          firstDay,
+          layout
+        );
+
+
+      const monthLayer =
+        createUse(
+          "hk-daily-outline"
+        );
+
+
+      monthLayer.setAttribute(
+        "transform",
+        `translate(0 ${offset.toFixed(2)})`
+      );
+
+      monthLayer.setAttribute(
+        "stroke",
+        colour
+      );
+
+      monthLayer.setAttribute(
+        "stroke-width",
+        String(
+          0.85 +
+          intensity * 2.0
+        )
+      );
+
+      monthLayer.setAttribute(
+        "stroke-opacity",
+        String(
+          0.30 +
+          intensity * 0.52
+        )
+      );
+
+
+      monthlyGroup.appendChild(
+        monthLayer
+      );
+
+
+      /*
+       * Month label
+       */
+
       const text =
-        document.createElementNS(
-          "http://www.w3.org/2000/svg",
+        createSvgElement(
           "text"
         );
+
+      const labelX =
+        Math.max(
+          32,
+          bounds.minX - 42
+        );
+
+
+      const labelY =
+        bounds.maxY +
+        offset -
+        4;
+
 
       text.setAttribute(
         "x",
@@ -1301,7 +1811,7 @@ function drawMonthLabels({
 
       text.setAttribute(
         "y",
-        baseY + offset
+        labelY
       );
 
       text.setAttribute(
@@ -1311,14 +1821,12 @@ function drawMonthLabels({
 
       text.setAttribute(
         "fill-opacity",
-        0.30 +
-        0.65 *
-        stackProgress
+        "0.92"
       );
 
       text.setAttribute(
         "font-size",
-        "9"
+        "10"
       );
 
       text.setAttribute(
@@ -1328,12 +1836,12 @@ function drawMonthLabels({
 
       text.setAttribute(
         "font-weight",
-        "600"
+        "700"
       );
 
       text.setAttribute(
         "letter-spacing",
-        "1.4"
+        "1.5"
       );
 
       text.setAttribute(
@@ -1342,23 +1850,27 @@ function drawMonthLabels({
       );
 
       text.textContent =
-        MONTH_NAMES[
-          monthIndex
-        ];
+        month.name;
+
 
       svg.appendChild(
         text
       );
     }
   );
+
+
+  svg.appendChild(
+    monthlyGroup
+  );
 }
 
 
 /* =========================================================
-   DRAW 365 LAYERS
+   RENDER
    ========================================================= */
 
-function drawLightningStack() {
+function renderVisualisation() {
   if (
     !coastlineGeoJSON ||
     !boundaryGeoJSON ||
@@ -1367,10 +1879,13 @@ function drawLightningStack() {
     return;
   }
 
+
   const svg =
     ensureSvg();
 
-  svg.replaceChildren();
+  clearSvg(
+    svg
+  );
 
 
   const container =
@@ -1382,46 +1897,35 @@ function drawLightningStack() {
   const height =
     container.clientHeight;
 
+
   svg.setAttribute(
     "viewBox",
     `0 0 ${width} ${height}`
   );
 
 
-  /*
-   * Coastline:
-   * the actual shape repeated
-   * once for every day.
-   */
-
   const coastlinePaths =
-    getProjectedCoastlinePaths();
+    projectedCoastlinePaths();
 
   const boundaryRings =
-    getProjectedBoundaryRings();
-
-  if (
-    !coastlinePaths.length ||
-    !boundaryRings.length
-  ) {
-    return;
-  }
+    projectedBoundaryRings();
 
 
   const coastlinePath =
-    projectedPathsToSvgPath(
+    pathsToSvgPath(
       coastlinePaths,
       false
     );
 
   const boundaryPath =
-    projectedPathsToSvgPath(
+    pathsToSvgPath(
       boundaryRings,
       true
     );
 
+
   const bounds =
-    getProjectedBounds(
+    projectedBounds(
       boundaryRings
     );
 
@@ -1435,12 +1939,34 @@ function drawLightningStack() {
   }
 
 
-  drawExploreEnvironment({
+  /*
+   * Build the Hong Kong outline ONCE.
+   */
+
+  buildDefinitions(
     svg,
+    coastlinePath
+  );
+
+
+  if (
+    viewMode ===
+    "overview"
+  ) {
+    drawOverview(
+      svg
+    );
+
+    return;
+  }
+
+
+  drawExploreEnvironment(
+    svg,
+    boundaryPath,
     width,
-    height,
-    boundaryPath
-  });
+    height
+  );
 
 
   const calendar =
@@ -1448,424 +1974,83 @@ function drawLightningStack() {
       selectedYear
     );
 
-  const intensityCap =
-    getIntensityCap(
-      calendar
-    );
 
-
-  const coreGroup =
-    document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "g"
-    );
-
-  coreGroup.style.mixBlendMode =
-    "screen";
-
-
-  const glowGroup =
-    document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "g"
-    );
-
-  glowGroup.style.mixBlendMode =
-    "screen";
-
-  glowGroup.style.filter =
-    "blur(1.9px)";
-
-
-  calendar.forEach(
-    (
-      item,
-      dayIndex
-    ) => {
-      const value =
-        item.record
-          ? item.record.value
-          : 0;
-
-
-      const intensity =
-        intensityForValue(
-          value,
-          intensityCap
-        );
-
-
-      const shaped =
-        Math.pow(
-          intensity,
-          0.72
-        );
-
-
-      const colour =
-        colourForYearPosition(
-          dayIndex /
-          Math.max(
-            1,
-            calendar.length - 1
-          )
-        );
-
-
-      /*
-       * THIS is the temporal axis.
-       *
-       * Jan = bottom
-       * Dec = top
-       */
-
-      const offsetY =
-        layerOffsetForDay({
-          dayIndex,
-          monthIndex:
-            item.monthIndex,
-
-          totalDays:
-            calendar.length,
-
-          containerHeight:
-            height
-        });
-
-
-      const transform =
-        `translate(0 ${offsetY.toFixed(2)})`;
-
-
-      /*
-       * When stackProgress = 0:
-       * all 365 outlines overlap.
-       *
-       * When stackProgress = 1:
-       * all 365 days unfold vertically.
-       */
-
-      const overviewFactor =
-        1 -
-        stackProgress;
-
-      const exploreFactor =
-        stackProgress;
-
-
-      /*
-       * Main line.
-       *
-       * Lightning count controls:
-       * opacity + thickness.
-       */
-
-      const coreOpacity =
-        value > 0
-
-          ? (
-              0.018 *
-              overviewFactor
-
-              +
-
-              (
-                0.09 +
-                shaped *
-                0.50
-              ) *
-              exploreFactor
-            )
-
-          : (
-              0.004 *
-              overviewFactor
-
-              +
-
-              0.025 *
-              exploreFactor
-            );
-
-
-      const coreWidth =
-        value > 0
-          ? 0.42 +
-            shaped *
-            1.15
-          : 0.32;
-
-
-      const core =
-        createSvgPath({
-          d:
-            coastlinePath,
-
-          stroke:
-            colour,
-
-          strokeWidth:
-            coreWidth,
-
-          strokeOpacity:
-            coreOpacity,
-
-          transform
-        });
-
-      coreGroup.appendChild(
-        core
-      );
-
-
-      /*
-       * Glow only for active days.
-       */
-
-      if (
-        value > 0
-      ) {
-        const glowOpacity =
-          0.006 *
-          overviewFactor
-
-          +
-
-          (
-            0.035 +
-            shaped *
-            0.16
-          ) *
-          exploreFactor;
-
-
-        const glow =
-          createSvgPath({
-            d:
-              coastlinePath,
-
-            stroke:
-              colour,
-
-            strokeWidth:
-              1.8 +
-              shaped *
-              3.4,
-
-            strokeOpacity:
-              glowOpacity,
-
-            transform
-          });
-
-        glowGroup.appendChild(
-          glow
-        );
-      }
-    }
-  );
-
-
-  svg.appendChild(
-    glowGroup
-  );
-
-  svg.appendChild(
-    coreGroup
-  );
-
-
-  drawMonthLabels({
+  drawExploreStack(
     svg,
-    bounds,
     calendar,
-    containerHeight:
-      height
-  });
-}
-
-
-/* =========================================================
-   REDRAW
-   ========================================================= */
-
-function scheduleRedraw() {
-  if (
-    redrawQueued
-  ) {
-    return;
-  }
-
-  redrawQueued =
-    true;
-
-  requestAnimationFrame(
-    () => {
-      redrawQueued =
-        false;
-
-      drawLightningStack();
-    }
+    bounds,
+    height
   );
 }
 
 
 /* =========================================================
-   ANIMATION
+   CAMERA / PERFORMANCE
    ========================================================= */
 
-function easeInOutCubic(t) {
-  return t < 0.5
-    ? 4 * t * t * t
-    : 1 -
-      Math.pow(
-        -2 * t + 2,
-        3
-      ) / 2;
-}
-
-
-function animateStackTo(
-  target,
-  duration = 1700
+function setOverlayOpacity(
+  opacity
 ) {
-  if (
-    stackAnimationFrame
-  ) {
-    cancelAnimationFrame(
-      stackAnimationFrame
+  const svg =
+    document.getElementById(
+      "lightning-stack"
     );
+
+  if (svg) {
+    svg.style.opacity =
+      String(opacity);
   }
-
-  const startValue =
-    stackProgress;
-
-  const difference =
-    target -
-    startValue;
-
-  const startTime =
-    performance.now();
-
-
-  function frame(now) {
-    const elapsed =
-      now -
-      startTime;
-
-    const raw =
-      Math.min(
-        1,
-        elapsed /
-        duration
-      );
-
-    const eased =
-      easeInOutCubic(
-        raw
-      );
-
-    stackProgress =
-      startValue +
-      difference *
-      eased;
-
-    drawLightningStack();
-
-
-    if (
-      raw < 1
-    ) {
-      stackAnimationFrame =
-        requestAnimationFrame(
-          frame
-        );
-    }
-
-    else {
-      stackProgress =
-        target;
-
-      stackAnimationFrame =
-        null;
-
-      drawLightningStack();
-    }
-  }
-
-
-  stackAnimationFrame =
-    requestAnimationFrame(
-      frame
-    );
 }
 
 
-/* =========================================================
-   EXPLORE MODE
-   ========================================================= */
+/*
+ * IMPORTANT:
+ *
+ * We deliberately DO NOT redraw on:
+ *
+ * map.on("move")
+ *
+ * anymore.
+ *
+ * During camera motion the existing
+ * overlay simply fades down.
+ *
+ * Geometry is recalculated ONCE
+ * when the camera stops.
+ */
 
-function enterExploreMode() {
-  if (
-    viewMode ===
-    "explore"
-  ) {
-    return;
-  }
-
-  viewMode =
-    "explore";
-
-
-  /*
-   * Hong Kong tilts into
-   * 2.5D perspective.
-   */
-
-  map.easeTo({
-    center: [
-      114.15,
-      22.34
-    ],
-
-    zoom:
-      10.35,
-
-    pitch:
-      58,
-
-    bearing:
-      -18,
-
-    duration:
-      1700,
-
-    essential:
-      true
-  });
-
-
-  /*
-   * At the same time:
-   *
-   * 365 overlapped outlines
-   * unfold vertically.
-   */
-
-  animateStackTo(
-    1,
-    1750
+function attachMapPerformanceEvents() {
+  map.on(
+    "movestart",
+    () => {
+      setOverlayOpacity(
+        0.12
+      );
+    }
   );
-}
 
 
-function leaveExploreMode() {
-  viewMode =
-    "overview";
+  map.on(
+    "moveend",
+    () => {
+      renderVisualisation();
 
-  animateStackTo(
-    0,
-    1100
+      requestAnimationFrame(
+        () => {
+          setOverlayOpacity(
+            1
+          );
+        }
+      );
+    }
+  );
+
+
+  map.on(
+    "resize",
+    () => {
+      renderVisualisation();
+    }
   );
 }
 
@@ -1885,7 +2070,7 @@ function clickIsOnHongKong(
     return false;
   }
 
-  const hits =
+  return (
     map.queryRenderedFeatures(
       event.point,
       {
@@ -1893,10 +2078,73 @@ function clickIsOnHongKong(
           HK_LAYER_ID
         ]
       }
-    );
+    ).length > 0
+  );
+}
 
-  return (
-    hits.length > 0
+
+function enterExploreMode() {
+  if (
+    viewMode ===
+    "explore"
+  ) {
+    return;
+  }
+
+
+  viewMode =
+    "explore";
+
+
+  /*
+   * No SVG reconstruction while
+   * this camera animation runs.
+   */
+
+  map.easeTo({
+    center: [
+      114.15,
+      22.34
+    ],
+
+    zoom:
+      9.95,
+
+    pitch:
+      57,
+
+    bearing:
+      -18,
+
+    duration:
+      1350,
+
+    essential:
+      true
+  });
+}
+
+
+function leaveExploreMode() {
+  viewMode =
+    "overview";
+
+  /*
+   * Existing Reset button will also
+   * move the camera. moveend will
+   * redraw the lightweight overview.
+   */
+
+  setTimeout(
+    () => {
+      if (
+        !map.isMoving()
+      ) {
+        renderVisualisation();
+        setOverlayOpacity(1);
+      }
+    },
+    80
   );
 }
 
@@ -1935,16 +2183,15 @@ function attachInteraction() {
         viewMode ===
         "explore"
       ) {
-        map
-          .getCanvas()
+        map.getCanvas()
           .style.cursor =
             "grab";
 
         return;
       }
 
-      map
-        .getCanvas()
+
+      map.getCanvas()
         .style.cursor =
           clickIsOnHongKong(
             event
@@ -1952,18 +2199,6 @@ function attachInteraction() {
             ? "pointer"
             : "";
     }
-  );
-
-
-  map.on(
-    "move",
-    scheduleRedraw
-  );
-
-
-  map.on(
-    "resize",
-    scheduleRedraw
   );
 
 
@@ -1977,6 +2212,9 @@ function attachInteraction() {
         leaveExploreMode();
       }
     );
+
+
+  attachMapPerformanceEvents();
 }
 
 
@@ -2017,12 +2255,12 @@ async function initialiseLightning() {
 
   const start =
     () => {
-      drawLightningStack();
+      renderVisualisation();
 
       attachInteraction();
 
       console.log(
-        "Thunder Rhythm 365-layer temporal stack ready."
+        "Thunder Rhythm optimised month-day stack ready."
       );
     };
 
