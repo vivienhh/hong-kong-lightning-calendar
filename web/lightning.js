@@ -1117,7 +1117,7 @@ function create2025YearOrbit(
         i *
         12.9898
       ) *
-      0.030;
+      0.020;
 
 
     phases[i] =

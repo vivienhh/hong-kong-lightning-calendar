@@ -685,3 +685,14 @@ This structure was adapted from the motion logic of an OpenProcessing reference 
 The simplified test was much more successful than the earlier full hierarchy experiments. The 22 rings now remain spatially coherent and form a nested kinetic structure rather than dispersing into a cloud of independent objects.
 
 The next step is to keep this carrier-ring motion unchanged and replace only the 2025 carrier ring with the complete 2025 Year module. This will test whether the existing Year → Month → Day visualisation can be embedded inside the successful carrier-ring motion system without changing the internal month and day design.
+
+
+### Integrating the 2025 module into the 22-year carrier system
+
+After confirming the 22-year carrier-ring motion, I reintroduced the complete 2025 Year → Month → Day module into the larger structure. The first integration showed that the original Month ripple systems were too large for future multi-year stacking, so I reduced each Month system while keeping its position, Daily-ring structure, and ripple motion unchanged.
+
+I also tested several alternatives for the Year-level light, including denser particles and continuous glow rings. These versions made the orbit more continuous, but they lost the soft clustered light quality of the earlier 2025 prototype. I therefore returned to the original Prototype 03.1 Year-light shader and used it as the visual reference.
+
+To reduce visible gaps without making the light blobs too large, I increased the particle density, reduced the random phase offset, raised the minimum brightness, and slightly reduced the point size. This produced a more continuous but still uneven and luminous Year orbit.
+
+The earlier standalone 2025 prototype is still preserved separately as a reference. This iteration confirmed that the next step should be to test multiple complete Year modules gradually rather than expanding all 22 years at once.
