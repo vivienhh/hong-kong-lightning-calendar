@@ -67,3 +67,178 @@ The distinction between individual days and months was also still not strong eno
 The colour and glow treatment also became too visually dominant. Because many active layers overlapped, the blue, lavender, pink, and gold gradients accumulated into a bright pastel surface, reducing the contrast between ordinary days and extreme lightning events. The floating base below the map also became visually heavy and competed with the data layers instead of supporting them.
 
 This iteration therefore showed that the main problem was not only performance, but also the visual granularity of the geographic geometry itself. Before continuing, I need to reconsider how much geographic detail should be repeated in the temporal stack. Possible next steps include simplifying the Hong Kong contour, strengthening the separation between month-level and day-level information, reducing colour and glow, and making the floating geographic base lighter and less dominant.
+
+### From stacked annual rings to a nested particle temporal sphere
+
+After the earlier month–day stack experiments, I reconsidered the visual structure of the project from the data hierarchy itself. The lightning dataset is fundamentally temporal. It contains daily cloud-to-ground lightning counts across Hong Kong from 2005 to 2026, which can naturally be read at three nested scales: year, month, and day. Rather than forcing the data into repeated geographic outlines, I decided to make time itself the main organising structure.
+
+The new concept is based on light as the primary visual metaphor. Because lightning is itself a visible burst of light, the recorded lightning count can be translated into brightness, line weight, glow, and diffusion. Time determines the position and order of the visual elements, while lightning activity determines how strongly those elements appear.
+
+#### Data hierarchy
+
+The visualisation now follows a nested temporal structure:
+
+- 2005–2026 forms the complete visual timeline of 22 annual systems.
+- 2005 is a partial year because the dataset begins on 21 June.
+- 2006–2025 are complete calendar years.
+- 2026 is an incomplete / year-to-date year.
+- Each year contains 12 monthly systems.
+- Each month contains 28–31 daily data units.
+- Each daily unit corresponds directly to one recorded lightning count in the original dataset.
+
+This means that the final temporal structure can ultimately be built from the same 7,742 daily records contained in the original CSV rather than from decorative or invented particles.
+
+#### Reintroducing Hong Kong as the spatial context
+
+I decided to keep the Hong Kong map developed in the earlier prototypes, but change its role.
+
+Instead of using the geography itself to encode daily lightning values, the Hong Kong map now becomes the spatial stage or geographic anchor of the experience. The temporal data exists as a separate three-dimensional light structure suspended above the map.
+
+In the initial view, the user sees Hong Kong from almost directly above. From this perspective, the temporal structure appears as a concentrated luminous area above the territory. The intention is that the user initially perceives one accumulated field of light rather than immediately seeing the internal data hierarchy.
+
+When the user drags and lowers the viewing angle, the Hong Kong map becomes a horizontal plane and the light structure is revealed as a three-dimensional temporal object floating above it. This creates a perspective-based reveal: what first appeared to be a flat glow is actually a volume made from many years of lightning records.
+
+The map therefore answers the question of “where”, while the temporal light structure answers “when” and “how much”.
+
+#### First Three.js temporal sphere prototype
+
+To test this spatial interaction, I built a first Three.js prototype on top of the existing MapLibre map.
+
+The prototype contains 22 annual rings representing 2005–2026. The rings are arranged vertically and can be viewed from different angles. Users can drag horizontally to rotate around the structure, lower the camera angle to reveal the depth of the annual layers, zoom with the scroll wheel, hover over annual rings, and click a year to inspect its total lightning count, active days, and peak day.
+
+This prototype successfully demonstrated several technical possibilities:
+
+- Three.js can be layered above the existing MapLibre Hong Kong map.
+- The data object and the geographic map can respond together to the same camera interaction.
+- The user can rotate around the temporal object and inspect it from different perspectives.
+- Annual data can be calculated directly from the committed daily CSV.
+- Partial years such as 2005 and 2026 can be represented differently from complete years.
+- A progressive Year → Month → Day interaction is technically feasible.
+
+However, the visual result also revealed an important problem. Because every year was represented as one complete torus and the 22 torus rings were stacked vertically, the object appeared more like a glowing cylinder, spring, or stack of horizontal hoops than a volumetric field of lightning. The rings were too geometrically regular and too visually dominant. The result did not match the more energetic, particle-based and spatially complex character I wanted from the visual references.
+
+This test showed that the problem is no longer the map or the 3D interaction itself. The main issue is the geometry used to construct the temporal object.
+
+#### New visual direction: Nested Particle Temporal Sphere
+
+The next direction is to replace the large stacked torus rings with a nested particle-based temporal structure.
+
+The temporal sphere will still contain the complete 2005–2026 hierarchy, but a year will no longer appear as one large solid ring. Instead, each annual system will be composed of its twelve monthly systems, and each monthly system will in turn be composed of approximately 28–31 daily light units.
+
+Conceptually:
+
+Year
+→ 12 monthly orbital systems
+
+Month
+→ 28–31 daily light units
+
+Day
+→ one real lightning count
+
+This creates a recursive visual system in which the same idea of light and orbit is repeated at different temporal scales.
+
+From a distance, the thousands of smaller elements should collectively form a luminous volumetric sphere. The outer boundary does not need to be a perfect geometric sphere. Instead, the spherical form should emerge naturally from multiple rotating orbital structures, particles, rings, and areas of varying brightness.
+
+As the viewer moves closer or selects a year, the internal organisation becomes clearer. A selected year can separate from the larger temporal field and reveal its twelve months. Selecting one month can then expand it into a set of daily concentric or orbital rings.
+
+#### Motion as part of the temporal structure
+
+The new temporal sphere should remain continuously alive rather than appearing as a static chart.
+
+The whole sphere can rotate very slowly as one global system. Individual annual systems can have slightly different orientations and subtle independent movement. Within each year, the twelve monthly systems can rotate slowly around their own orbital arrangement. Daily light units can also contain small amounts of movement or pulsing.
+
+The motion should not randomly change the data values. The recorded lightning count remains the base value controlling the visual strength of each day. Animation should only create a subtle breathing or energy effect around that fixed value.
+
+For example, a low-lightning day should remain visually weak, while an extreme lightning day can remain much brighter and produce a larger halo. Animation may slightly fluctuate this appearance, but it should not change the relative meaning of the data.
+
+#### Visual encoding
+
+The current visual language is:
+
+Time
+→ position, sequence, nesting, and orbital structure
+
+Lightning count
+→ brightness, line thickness, light intensity, and diffusion
+
+Colour
+→ temporal progression rather than lightning magnitude
+
+This distinction is important because it prevents too many visual variables from representing the same quantity.
+
+A quiet period should therefore appear sparse, thin, and dim, while a highly active period should naturally become denser, brighter, and more visually energetic.
+
+At the monthly level, this may create different visual densities. A month containing many active lightning days may appear almost solid and luminous because many daily units are visible. A month containing only a few active days may appear much more sparse, with large visual gaps between the strongest daily signals.
+
+#### Performance strategy
+
+A direct implementation using thousands of individual complex Three.js torus meshes would likely become too expensive to render. The earlier SVG experiments already showed that repeating complex geometry many hundreds of times could produce noticeable performance problems.
+
+The next prototype should therefore use progressive levels of detail.
+
+At the global view:
+
+- 22 year systems are visible.
+- Month and day structures should be represented with lightweight particles, points, instanced geometry, or shared materials.
+- The complete dataset can contribute to the appearance of the sphere without creating thousands of independent heavy meshes.
+
+When a year is selected:
+
+- the other annual systems can fade;
+- the selected year can reveal its 12 monthly systems in greater detail.
+
+When a month is selected:
+
+- only that month needs to render its 28–31 daily units using more detailed ring geometry.
+
+This allows the interface to preserve the full Year → Month → Day hierarchy while avoiding the performance problems of rendering every daily ring at maximum detail simultaneously.
+
+#### Current interaction concept
+
+The intended experience is now:
+
+Top view
+→ Hong Kong appears as a luminous geographic base
+→ multiple years visually overlap into one concentrated field of light
+
+Drag / rotate
+→ the map becomes a horizontal spatial plane
+→ the light field reveals itself as a three-dimensional temporal sphere
+→ the viewer can orbit around the object
+
+Inspect a year
+→ the selected annual system becomes prominent
+→ other years fade
+→ annual statistics become visible
+
+Open a year
+→ the annual system reveals twelve monthly orbital structures
+
+Open a month
+→ the month expands into 28–31 daily light rings or light cells
+
+Inspect a day
+→ exact date and daily lightning count are revealed
+
+This means the user is not switching between unrelated charts. Instead, the interaction behaves like moving deeper into the same temporal object.
+
+#### Design intention
+
+The project is therefore evolving from a conventional data visualisation into a nested temporal data sculpture.
+
+Hong Kong is the geographic stage.
+
+The temporal sphere represents accumulated lightning through time.
+
+Years, months, and days are nested within one another.
+
+The same visual language of light is maintained across all three scales.
+
+The key idea can currently be summarised as:
+
+> A year is a light made from twelve months.  
+> A month is a light made from its days.  
+> Twenty-two years accumulate above Hong Kong as a moving temporal field of lightning.
+
+The next step is to replace the current stacked annual torus prototype with a lightweight nested particle architecture while preserving the working map, camera interaction, annual data processing, and 360-degree viewing controls.

@@ -1,43 +1,59 @@
-const LIGHTNING_DATA_PATH =
-  "./data/daily_HK_LGTG_ALL.csv";
+const LIGHTNING_DATA_PATH = "./data/daily_HK_LGTG_ALL.csv";
 
-const COASTLINE_PATH =
-  "./data/hong-kong-coastline.geojson";
+const YEAR_START = 2005;
+const YEAR_END = 2026;
 
-const BOUNDARY_PATH =
-  "./data/hong-kong-boundary-precise.geojson";
+const HK_CENTER = [114.15, 22.34];
 
-const DEFAULT_YEAR = 2025;
-const HK_LAYER_ID = "hong-kong-lavender";
+const PARTIAL_YEARS = {
+  2005: "PARTIAL · STARTS 21 JUN",
+  2026: "PARTIAL / YTD"
+};
 
-const MONTH_NAMES = [
-  "JAN", "FEB", "MAR", "APR",
-  "MAY", "JUN", "JUL", "AUG",
-  "SEP", "OCT", "NOV", "DEC"
-];
-
-const YEAR_COLOURS = [
-  "#A7DFFF",
-  "#63EFE4",
-  "#C7CBFF",
-  "#AEB6FF",
-  "#E7B7C8",
-  "#E4C98C",
-  "#63EFE4",
-  "#A7DFFF"
-];
+let THREE = null;
 
 let lightningRecords = [];
-let coastlineGeoJSON = null;
-let boundaryGeoJSON = null;
+let annualStats = [];
 
-let selectedYear = DEFAULT_YEAR;
-let viewMode = "overview";
-let interactionAttached = false;
+let renderer = null;
+let scene = null;
+let camera = null;
+let temporalSphere = null;
+
+let yearObjects = [];
+let pickMeshes = [];
+
+let selectedYear = null;
+let hoveredYear = null;
+
+let raycaster = null;
+let mouse = null;
+
+let renderQueued = false;
+let mapSyncQueued = false;
+let controlsAttached = false;
+
+const DEFAULT_ORBIT = {
+  azimuth: 0,
+  polar: 0.07,
+  distance: 7.4
+};
+
+const orbit = {
+  ...DEFAULT_ORBIT
+};
+
+const pointer = {
+  down: false,
+  id: null,
+  x: 0,
+  y: 0,
+  moved: false
+};
 
 
 /* =========================================================
-   LOAD
+   DATA
    ========================================================= */
 
 async function loadText(path) {
@@ -53,64 +69,46 @@ async function loadText(path) {
 }
 
 
-async function loadJSON(path) {
-  const response = await fetch(path);
+function parseLightningData(text) {
+  const lines = text
+    .trim()
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
 
-  if (!response.ok) {
-    throw new Error(
-      `Could not load ${path}: ${response.status}`
+  /*
+   * CSV:
+   * line 1 = Chinese title
+   * line 2 = English title
+   * line 3 = header
+   * line 4 onwards = data
+   */
+
+  lightningRecords = lines
+    .slice(3)
+    .map(line => {
+      const [
+        year,
+        month,
+        day,
+        value,
+        completeness
+      ] = line.split(",");
+
+      return {
+        year: Number(year),
+        month: Number(month),
+        day: Number(day),
+        value: Number(value),
+        completeness: completeness?.trim() || ""
+      };
+    })
+    .filter(record =>
+      Number.isFinite(record.year) &&
+      Number.isFinite(record.month) &&
+      Number.isFinite(record.day) &&
+      Number.isFinite(record.value)
     );
-  }
-
-  return response.json();
-}
-
-
-/* =========================================================
-   LIGHTNING DATA
-   ========================================================= */
-
-async function loadLightningData() {
-  const text =
-    await loadText(
-      LIGHTNING_DATA_PATH
-    );
-
-  const lines =
-    text
-      .trim()
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .filter(Boolean);
-
-  lightningRecords =
-    lines
-      .slice(3)
-      .map(line => {
-        const [
-          year,
-          month,
-          day,
-          value,
-          completeness
-        ] = line.split(",");
-
-        return {
-          year: Number(year),
-          month: Number(month),
-          day: Number(day),
-          value: Number(value),
-
-          completeness:
-            completeness?.trim() || ""
-        };
-      })
-      .filter(record =>
-        Number.isFinite(record.year) &&
-        Number.isFinite(record.month) &&
-        Number.isFinite(record.day) &&
-        Number.isFinite(record.value)
-      );
 
   console.log(
     "Lightning records loaded:",
@@ -119,1749 +117,1014 @@ async function loadLightningData() {
 }
 
 
-/* =========================================================
-   CALENDAR
-   ========================================================= */
+function buildAnnualStats() {
+  annualStats = [];
 
-function isLeapYear(year) {
-  return (
-    year % 4 === 0 &&
-    year % 100 !== 0
-  ) || year % 400 === 0;
-}
-
-
-function daysInYear(year) {
-  return isLeapYear(year)
-    ? 366
-    : 365;
-}
-
-
-function dayOfYear(
-  year,
-  month,
-  day
-) {
-  const start =
-    Date.UTC(
-      year,
-      0,
-      1
+  for (
+    let year = YEAR_START;
+    year <= YEAR_END;
+    year += 1
+  ) {
+    const records = lightningRecords.filter(
+      record => record.year === year
     );
 
-  const current =
-    Date.UTC(
-      year,
-      month - 1,
-      day
-    );
-
-  return Math.floor(
-    (current - start) /
-    86400000
-  );
-}
-
-
-function recordsForYear(year) {
-  return lightningRecords
-    .filter(
-      record =>
-        record.year === year
-    )
-    .sort(
-      (a, b) =>
-        (a.month - b.month) ||
-        (a.day - b.day)
-    );
-}
-
-
-function buildCalendarYear(year) {
-  const totalDays =
-    daysInYear(year);
-
-  const calendar =
-    Array.from(
-      {
-        length: totalDays
-      },
-
-      (_, index) => {
-        const date =
-          new Date(
-            Date.UTC(
-              year,
-              0,
-              index + 1
-            )
-          );
-
-        return {
-          index,
-          monthIndex:
-            date.getUTCMonth(),
-
-          dayOfMonth:
-            date.getUTCDate(),
-
-          record: null
-        };
-      }
-    );
-
-  recordsForYear(year)
-    .forEach(record => {
-      const index =
-        dayOfYear(
-          record.year,
-          record.month,
-          record.day
-        );
-
-      if (
-        index >= 0 &&
-        index < calendar.length
-      ) {
-        calendar[index].record =
-          record;
-      }
-    });
-
-  return calendar;
-}
-
-
-/* =========================================================
-   MONTH SUMMARY
-   ========================================================= */
-
-function getMonthSummaries(
-  calendar
-) {
-  return MONTH_NAMES.map(
-    (
-      name,
-      monthIndex
-    ) => {
-      const days =
-        calendar.filter(
-          item =>
-            item.monthIndex ===
-            monthIndex
-        );
-
-      const values =
-        days.map(
-          item =>
-            item.record
-              ? item.record.value
-              : 0
-        );
-
-      const total =
-        values.reduce(
-          (sum, value) =>
-            sum + value,
-          0
-        );
-
-      const activeDays =
-        values.filter(
-          value =>
-            value > 0
-        ).length;
-
-      const startIndex =
-        days.length
-          ? days[0].index
-          : 0;
-
-      return {
-        monthIndex,
-        name,
-        total,
-        activeDays,
-        startIndex,
-        numberOfDays:
-          days.length
-      };
-    }
-  );
-}
-
-
-/* =========================================================
-   SUMMARY
-   ========================================================= */
-
-function showYearSummary(year) {
-  const records =
-    recordsForYear(year);
-
-  if (!records.length) {
-    return;
-  }
-
-  const annualTotal =
-    records.reduce(
+    const total = records.reduce(
       (sum, record) =>
         sum + record.value,
       0
     );
 
-  const activeDays =
-    records.filter(
-      record =>
-        record.value > 0
+    const activeDays = records.filter(
+      record => record.value > 0
     ).length;
 
-  const peakDay =
-    records.reduce(
-      (highest, record) =>
-        record.value >
-        highest.value
-          ? record
-          : highest,
-      records[0]
-    );
+    let peakRecord = null;
 
-  console.log(
-    `----- ${year} -----`
-  );
-
-  console.log(
-    "Annual total:",
-    annualTotal
-  );
-
-  console.log(
-    "Active days:",
-    activeDays
-  );
-
-  console.log(
-    "Peak day:",
-    `${peakDay.year}-${peakDay.month}-${peakDay.day}`
-  );
-
-  console.log(
-    "Peak count:",
-    peakDay.value
-  );
-
-  console.log(
-    "Number of records:",
-    records.length
-  );
-}
-
-
-/* =========================================================
-   GEOJSON EXTRACTION
-   ========================================================= */
-
-function extractLinePaths(
-  value,
-  result = []
-) {
-  if (!value) {
-    return result;
-  }
-
-  if (
-    value.type ===
-    "FeatureCollection"
-  ) {
-    value.features
-      .forEach(feature =>
-        extractLinePaths(
-          feature,
-          result
-        )
-      );
-
-    return result;
-  }
-
-  if (
-    value.type ===
-    "Feature"
-  ) {
-    return extractLinePaths(
-      value.geometry,
-      result
-    );
-  }
-
-  if (
-    value.type ===
-    "GeometryCollection"
-  ) {
-    value.geometries
-      .forEach(geometry =>
-        extractLinePaths(
-          geometry,
-          result
-        )
-      );
-
-    return result;
-  }
-
-  if (
-    value.type ===
-    "LineString"
-  ) {
-    result.push(
-      value.coordinates
-    );
-  }
-
-  else if (
-    value.type ===
-    "MultiLineString"
-  ) {
-    value.coordinates
-      .forEach(line =>
-        result.push(line)
-      );
-  }
-
-  else if (
-    value.type ===
-    "Polygon"
-  ) {
-    value.coordinates
-      .forEach(ring =>
-        result.push(ring)
-      );
-  }
-
-  else if (
-    value.type ===
-    "MultiPolygon"
-  ) {
-    value.coordinates
-      .forEach(polygon =>
-        polygon.forEach(ring =>
-          result.push(ring)
-        )
-      );
-  }
-
-  return result;
-}
-
-
-function extractOuterRings(
-  value,
-  result = []
-) {
-  if (!value) {
-    return result;
-  }
-
-  if (
-    value.type ===
-    "FeatureCollection"
-  ) {
-    value.features
-      .forEach(feature =>
-        extractOuterRings(
-          feature,
-          result
-        )
-      );
-
-    return result;
-  }
-
-  if (
-    value.type ===
-    "Feature"
-  ) {
-    return extractOuterRings(
-      value.geometry,
-      result
-    );
-  }
-
-  if (
-    value.type ===
-    "Polygon"
-  ) {
-    if (
-      value.coordinates[0]
-    ) {
-      result.push(
-        value.coordinates[0]
-      );
-    }
-  }
-
-  else if (
-    value.type ===
-    "MultiPolygon"
-  ) {
-    value.coordinates
-      .forEach(polygon => {
-        if (
-          polygon[0]
-        ) {
-          result.push(
-            polygon[0]
-          );
-        }
-      });
-  }
-
-  return result;
-}
-
-
-/* =========================================================
-   PROJECT TO SCREEN
-   ========================================================= */
-
-function projectCoordinatePath(
-  coordinates,
-  maxPoints = 250
-) {
-  /*
-   * Another important optimisation:
-   * simplify the coastline used by the
-   * temporal stack.
-   *
-   * The real geographic form remains,
-   * but unnecessary screen-level detail
-   * is removed.
-   */
-
-  const step =
-    Math.max(
-      1,
-      Math.ceil(
-        coordinates.length /
-        maxPoints
-      )
-    );
-
-  const sampled = [];
-
-  for (
-    let i = 0;
-    i < coordinates.length;
-    i += step
-  ) {
-    sampled.push(
-      coordinates[i]
-    );
-  }
-
-  if (
-    coordinates.length > 1
-  ) {
-    sampled.push(
-      coordinates[
-        coordinates.length - 1
-      ]
-    );
-  }
-
-  return sampled.map(
-    ([lng, lat]) => {
-      const point =
-        map.project({
-          lng,
-          lat
-        });
-
-      return {
-        x: point.x,
-        y: point.y
-      };
-    }
-  );
-}
-
-
-function projectedCoastlinePaths() {
-  return extractLinePaths(
-    coastlineGeoJSON
-  )
-    .map(path =>
-      projectCoordinatePath(
-        path,
-        240
-      )
-    )
-    .filter(
-      path =>
-        path.length > 1
-    );
-}
-
-
-function projectedBoundaryRings() {
-  return extractOuterRings(
-    boundaryGeoJSON
-  )
-    .map(ring =>
-      projectCoordinatePath(
-        ring,
-        320
-      )
-    )
-    .filter(
-      ring =>
-        ring.length > 2
-    );
-}
-
-
-function pathsToSvgPath(
-  paths,
-  close = false
-) {
-  return paths
-    .map(path => {
-      if (!path.length) {
-        return "";
+    records.forEach(record => {
+      if (
+        !peakRecord ||
+        record.value > peakRecord.value
+      ) {
+        peakRecord = record;
       }
+    });
 
-      const [
-        first,
-        ...rest
-      ] = path;
+    annualStats.push({
+      year,
+      total,
+      activeDays,
+      recordCount: records.length,
 
-      return (
-        `M ${first.x.toFixed(1)} ${first.y.toFixed(1)} ` +
+      peakValue:
+        peakRecord?.value ?? 0,
 
-        rest
-          .map(point =>
-            `L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
-          )
-          .join(" ") +
+      peakDate:
+        peakRecord
+          ? `${peakRecord.year}-${String(
+              peakRecord.month
+            ).padStart(2, "0")}-${String(
+              peakRecord.day
+            ).padStart(2, "0")}`
+          : "—",
 
-        (
-          close
-            ? " Z"
-            : ""
-        )
-      );
-    })
-    .join(" ");
-}
+      complete:
+        year >= 2006 &&
+        year <= 2025,
 
-
-function projectedBounds(paths) {
-  const points =
-    paths.flat();
-
-  if (!points.length) {
-    return null;
+      partialLabel:
+        PARTIAL_YEARS[year] || ""
+    });
   }
 
-  return {
-    minX:
-      Math.min(
-        ...points.map(
-          point =>
-            point.x
-        )
-      ),
-
-    maxX:
-      Math.max(
-        ...points.map(
-          point =>
-            point.x
-        )
-      ),
-
-    minY:
-      Math.min(
-        ...points.map(
-          point =>
-            point.y
-        )
-      ),
-
-    maxY:
-      Math.max(
-        ...points.map(
-          point =>
-            point.y
-        )
-      )
-  };
-}
-
-
-/* =========================================================
-   COLOUR
-   ========================================================= */
-
-function hexToRgb(hex) {
-  const clean =
-    hex.replace(
-      "#",
-      ""
-    );
-
-  return {
-    r:
-      parseInt(
-        clean.slice(0, 2),
-        16
-      ),
-
-    g:
-      parseInt(
-        clean.slice(2, 4),
-        16
-      ),
-
-    b:
-      parseInt(
-        clean.slice(4, 6),
-        16
-      )
-  };
-}
-
-
-function interpolateColour(
-  colourA,
-  colourB,
-  amount
-) {
-  const a =
-    hexToRgb(
-      colourA
-    );
-
-  const b =
-    hexToRgb(
-      colourB
-    );
-
-  return (
-    `rgb(` +
-    `${Math.round(
-      a.r +
-      (b.r - a.r) *
-      amount
-    )}, ` +
-
-    `${Math.round(
-      a.g +
-      (b.g - a.g) *
-      amount
-    )}, ` +
-
-    `${Math.round(
-      a.b +
-      (b.b - a.b) *
-      amount
-    )}` +
-    `)`
-  );
-}
-
-
-function colourForPosition(
-  position
-) {
-  const scaled =
-    position *
-    (
-      YEAR_COLOURS.length - 1
-    );
-
-  const index =
-    Math.min(
-      Math.floor(scaled),
-      YEAR_COLOURS.length - 2
-    );
-
-  return interpolateColour(
-    YEAR_COLOURS[index],
-    YEAR_COLOURS[
-      index + 1
-    ],
-    scaled - index
-  );
-}
-
-
-/* =========================================================
-   INTENSITY
-   ========================================================= */
-
-function percentileCap(
-  values,
-  percentile = 0.97
-) {
-  const positive =
-    values
-      .filter(
-        value =>
-          value > 0
-      )
-      .map(
-        value =>
-          Math.log1p(value)
-      )
-      .sort(
-        (a, b) =>
-          a - b
-      );
-
-  if (!positive.length) {
-    return 1;
-  }
-
-  const index =
-    Math.floor(
-      (
-        positive.length - 1
-      ) *
-      percentile
-    );
-
-  return Math.max(
-    positive[index],
-    1
-  );
-}
-
-
-function intensityForValue(
-  value,
-  cap
-) {
-  if (
-    value <= 0
-  ) {
-    return 0;
-  }
-
-  return Math.min(
-    1,
-    Math.log1p(value) /
-    cap
-  );
-}
-
-
-/* =========================================================
-   STACK SPACING
-   ========================================================= */
-
-function getStackLayout(
-  calendar,
-  height
-) {
-  /*
-   * Target approximately 55–65%
-   * of the map viewport.
-   */
-
-  const stackHeight =
-    Math.min(
-      480,
-      Math.max(
-        330,
-        height * 0.61
-      )
-    );
 
   /*
-   * Bigger month gaps are intentional:
-   * the year should clearly read as
-   * twelve visual blocks.
+   * Use logarithmic normalisation so
+   * one extreme year does not dominate
+   * all the others visually.
    */
 
-  const monthGap = 9;
+  const logs = annualStats.map(
+    item =>
+      Math.log1p(item.total)
+  );
 
-  const totalMonthGap =
-    monthGap * 11;
+  const minLog =
+    Math.min(...logs);
 
-  const dailySpace =
-    (
-      stackHeight -
-      totalMonthGap
-    ) /
-    Math.max(
-      1,
-      calendar.length - 1
-    );
-
-  return {
-    stackHeight,
-    monthGap,
-    dailySpace
-  };
-}
+  const maxLog =
+    Math.max(...logs);
 
 
-function layerOffset(
-  item,
-  layout
-) {
-  return -(
-    item.index *
-    layout.dailySpace +
+  annualStats.forEach(item => {
+    const logValue =
+      Math.log1p(item.total);
 
-    item.monthIndex *
-    layout.monthGap
+    item.normalised =
+      maxLog === minLog
+        ? 0.5
+        : (
+            logValue -
+            minLog
+          ) /
+          (
+            maxLog -
+            minLog
+          );
+  });
+
+
+  console.log(
+    "Annual lightning statistics:",
+    annualStats
   );
 }
 
 
 /* =========================================================
-   SVG ROOT
+   THREE.JS
    ========================================================= */
 
-function ensureSvg() {
-  let svg =
-    document.getElementById(
-      "lightning-stack"
-    );
+function createRenderer() {
+  const container =
+    map.getContainer();
 
-  if (svg) {
-    return svg;
-  }
-
-  /*
-   * Remove legacy experimental SVG
-   * if one still exists.
-   */
 
   document
     .getElementById(
-      "lightning-halo"
+      "temporal-sphere-canvas"
     )
     ?.remove();
 
 
-  svg =
-    document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "svg"
+  const canvas =
+    document.createElement(
+      "canvas"
     );
 
-  svg.id =
-    "lightning-stack";
+
+  canvas.id =
+    "temporal-sphere-canvas";
+
 
   Object.assign(
-    svg.style,
+    canvas.style,
     {
-      position:
-        "absolute",
-
-      inset:
-        "0",
-
-      width:
-        "100%",
-
-      height:
-        "100%",
-
-      zIndex:
-        "6",
-
-      pointerEvents:
-        "none",
-
-      overflow:
-        "visible",
-
-      transition:
-        "opacity 280ms ease"
+      position: "absolute",
+      inset: "0",
+      width: "100%",
+      height: "100%",
+      zIndex: "7",
+      pointerEvents: "none"
     }
   );
 
-  map.getContainer()
-    .appendChild(svg);
 
-  return svg;
-}
+  container.appendChild(
+    canvas
+  );
 
 
-function clearSvg(svg) {
-  while (
-    svg.firstChild
+  renderer =
+    new THREE.WebGLRenderer({
+      canvas,
+      alpha: true,
+      antialias: true,
+      powerPreference:
+        "high-performance"
+    });
+
+
+  renderer.setPixelRatio(
+    Math.min(
+      window.devicePixelRatio || 1,
+      1.5
+    )
+  );
+
+
+  renderer.setClearColor(
+    0x000000,
+    0
+  );
+
+
+  if (
+    "outputColorSpace" in renderer &&
+    THREE.SRGBColorSpace
   ) {
-    svg.removeChild(
-      svg.firstChild
-    );
+    renderer.outputColorSpace =
+      THREE.SRGBColorSpace;
   }
 }
 
 
-/* =========================================================
-   SVG HELPERS
-   ========================================================= */
-
-function createSvgElement(name) {
-  return document
-    .createElementNS(
-      "http://www.w3.org/2000/svg",
-      name
-    );
-}
+function createScene() {
+  scene =
+    new THREE.Scene();
 
 
-function createUse(
-  pathId
-) {
-  const use =
-    createSvgElement(
-      "use"
-    );
-
-  use.setAttribute(
-    "href",
-    `#${pathId}`
-  );
-
-  return use;
-}
-
-
-/* =========================================================
-   DEFINITIONS
-   ========================================================= */
-
-function buildDefinitions(
-  svg,
-  coastlinePath
-) {
-  const defs =
-    createSvgElement(
-      "defs"
+  camera =
+    new THREE.PerspectiveCamera(
+      38,
+      1,
+      0.1,
+      100
     );
 
 
-  /*
-   * THIS is the key performance change.
-   *
-   * Hong Kong's coastline exists only
-   * ONCE in the SVG document.
-   *
-   * Every day simply references it
-   * using <use>.
-   */
+  raycaster =
+    new THREE.Raycaster();
 
-  const outline =
-    createSvgElement(
-      "path"
-    );
 
-  outline.id =
-    "hk-daily-outline";
+  mouse =
+    new THREE.Vector2();
 
-  outline.setAttribute(
-    "d",
-    coastlinePath
-  );
 
-  outline.setAttribute(
-    "fill",
-    "none"
-  );
+  temporalSphere =
+    new THREE.Group();
 
-  outline.setAttribute(
-    "stroke-linejoin",
-    "round"
-  );
 
-  outline.setAttribute(
-    "stroke-linecap",
-    "round"
-  );
-
-  outline.setAttribute(
-    "vector-effect",
-    "non-scaling-stroke"
-  );
-
-  defs.appendChild(
-    outline
+  scene.add(
+    temporalSphere
   );
 
 
-  /*
-   * One shared glow filter.
-   *
-   * Only the strongest days use it.
-   */
-
-  const filter =
-    createSvgElement(
-      "filter"
-    );
-
-  filter.id =
-    "lightning-strong-glow";
-
-  filter.setAttribute(
-    "x",
-    "-40%"
-  );
-
-  filter.setAttribute(
-    "y",
-    "-40%"
-  );
-
-  filter.setAttribute(
-    "width",
-    "180%"
-  );
-
-  filter.setAttribute(
-    "height",
-    "180%"
-  );
-
-
-  const blur =
-    createSvgElement(
-      "feGaussianBlur"
-    );
-
-  blur.setAttribute(
-    "stdDeviation",
-    "2.2"
-  );
-
-  blur.setAttribute(
-    "result",
-    "blur"
-  );
-
-
-  const merge =
-    createSvgElement(
-      "feMerge"
-    );
-
-
-  const mergeBlur =
-    createSvgElement(
-      "feMergeNode"
-    );
-
-  mergeBlur.setAttribute(
-    "in",
-    "blur"
-  );
-
-
-  const mergeOriginal =
-    createSvgElement(
-      "feMergeNode"
-    );
-
-  mergeOriginal.setAttribute(
-    "in",
-    "SourceGraphic"
-  );
-
-
-  merge.appendChild(
-    mergeBlur
-  );
-
-  merge.appendChild(
-    mergeOriginal
-  );
-
-  filter.appendChild(
-    blur
-  );
-
-  filter.appendChild(
-    merge
-  );
-
-  defs.appendChild(
-    filter
-  );
-
-
-  svg.appendChild(
-    defs
-  );
+  updateCamera();
 }
 
 
 /* =========================================================
-   OVERVIEW
+   GLOW TEXTURE
    ========================================================= */
 
-function drawOverview(
-  svg
-) {
-  /*
-   * Top-down overview does NOT need
-   * 365 separate DOM objects.
-   *
-   * Visually, all 365 layers occupy
-   * the same position anyway.
-   *
-   * One luminous composite outline
-   * preserves the concept while being
-   * dramatically lighter to render.
-   */
-
-  const glow =
-    createUse(
-      "hk-daily-outline"
+function makeGlowTexture() {
+  const canvas =
+    document.createElement(
+      "canvas"
     );
 
-  glow.setAttribute(
-    "stroke",
-    "#AEB6FF"
-  );
 
-  glow.setAttribute(
-    "stroke-width",
-    "6"
-  );
-
-  glow.setAttribute(
-    "stroke-opacity",
-    "0.12"
-  );
-
-  glow.setAttribute(
-    "filter",
-    "url(#lightning-strong-glow)"
-  );
+  canvas.width = 256;
+  canvas.height = 256;
 
 
-  const core =
-    createUse(
-      "hk-daily-outline"
+  const context =
+    canvas.getContext(
+      "2d"
     );
 
-  core.setAttribute(
-    "stroke",
-    "#E2E6FF"
-  );
 
-  core.setAttribute(
-    "stroke-width",
-    "1.15"
-  );
+  const gradient =
+    context.createRadialGradient(
+      128,
+      128,
+      0,
 
-  core.setAttribute(
-    "stroke-opacity",
-    "0.78"
-  );
+      128,
+      128,
+      128
+    );
 
 
-  svg.appendChild(
-    glow
+  gradient.addColorStop(
+    0,
+    "rgba(255,255,255,1)"
   );
 
-  svg.appendChild(
-    core
+  gradient.addColorStop(
+    0.10,
+    "rgba(225,247,255,0.92)"
   );
+
+  gradient.addColorStop(
+    0.25,
+    "rgba(125,225,255,0.48)"
+  );
+
+  gradient.addColorStop(
+    0.50,
+    "rgba(170,125,255,0.18)"
+  );
+
+  gradient.addColorStop(
+    0.75,
+    "rgba(115,70,255,0.055)"
+  );
+
+  gradient.addColorStop(
+    1,
+    "rgba(0,0,0,0)"
+  );
+
+
+  context.fillStyle =
+    gradient;
+
+
+  context.fillRect(
+    0,
+    0,
+    256,
+    256
+  );
+
+
+  const texture =
+    new THREE.CanvasTexture(
+      canvas
+    );
+
+
+  texture.needsUpdate =
+    true;
+
+
+  return texture;
 }
 
 
 /* =========================================================
-   BACKGROUND DIM + FLOATING MAP
+   YEAR COLOUR
    ========================================================= */
 
-function drawExploreEnvironment(
-  svg,
-  boundaryPath,
-  width,
-  height
-) {
-  /*
-   * Almost-black world outside HK.
-   */
-
-  const blackout =
-    createSvgElement(
-      "path"
+function colorForYear(index) {
+  const t =
+    index /
+    Math.max(
+      1,
+      annualStats.length - 1
     );
 
-  blackout.setAttribute(
-    "d",
+
+  /*
+   * Time moves through:
+   * cyan → blue → violet → pink.
+   *
+   * Colour = WHEN
+   * brightness/thickness = HOW MUCH
+   */
+
+  const hue =
+    188 +
+    t * 132;
+
+
+  const color =
+    new THREE.Color();
+
+
+  color.setHSL(
+    hue / 360,
+    0.88,
+    0.68
+  );
+
+
+  return color;
+}
+
+
+/* =========================================================
+   TEMPORAL SPHERE
+   ========================================================= */
+
+function clearTemporalSphere() {
+  if (!temporalSphere) {
+    return;
+  }
+
+
+  temporalSphere.traverse(
+    object => {
+      if (
+        object.geometry
+      ) {
+        object.geometry.dispose?.();
+      }
+
+
+      if (
+        object.material
+      ) {
+        if (
+          Array.isArray(
+            object.material
+          )
+        ) {
+          object.material
+            .forEach(material =>
+              material.dispose?.()
+            );
+        }
+
+        else {
+          object.material.dispose?.();
+        }
+      }
+    }
+  );
+
+
+  temporalSphere.clear();
+
+
+  yearObjects = [];
+  pickMeshes = [];
+}
+
+
+function buildTemporalSphere() {
+  clearTemporalSphere();
+
+
+  const glowTexture =
+    makeGlowTexture();
+
+
+  /*
+   * Main atmospheric glow.
+   *
+   * In top view all annual rings overlap,
+   * so this helps them read as one large
+   * luminous sphere / light spot.
+   */
+
+  const atmosphere =
+    new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: 0xa5e5ff,
+        transparent: true,
+        opacity: 0.16,
+        blending:
+          THREE.AdditiveBlending,
+        depthWrite: false
+      })
+    );
+
+
+  atmosphere.scale.set(
+    6.8,
+    6.8,
+    1
+  );
+
+
+  temporalSphere.add(
+    atmosphere
+  );
+
+
+  const innerGlow =
+    new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: 0xdab4ff,
+        transparent: true,
+        opacity: 0.10,
+        blending:
+          THREE.AdditiveBlending,
+        depthWrite: false
+      })
+    );
+
+
+  innerGlow.scale.set(
+    4.5,
+    4.5,
+    1
+  );
+
+
+  temporalSphere.add(
+    innerGlow
+  );
+
+
+  const totalYears =
+    annualStats.length;
+
+
+  annualStats.forEach(
     (
-      `M 0 0 ` +
-      `H ${width} ` +
-      `V ${height} ` +
-      `H 0 Z ` +
-      boundaryPath
+      stats,
+      index
+    ) => {
+      const position =
+        index /
+        Math.max(
+          1,
+          totalYears - 1
+        );
+
+
+      /*
+       * Oldest year at bottom,
+       * newest year at top.
+       */
+
+      const y =
+        -1.78 +
+        position * 3.56;
+
+
+      /*
+       * Slight radius change creates
+       * a rounded temporal volume.
+       *
+       * Radius itself is NOT the data.
+       */
+
+      const middleDistance =
+        Math.abs(
+          position - 0.5
+        ) * 2;
+
+
+      const radius =
+        2.00 +
+        (
+          1 -
+          middleDistance
+        ) *
+          0.28;
+
+
+      const intensity =
+        Math.pow(
+          stats.normalised,
+          0.78
+        );
+
+
+      const color =
+        colorForYear(
+          index
+        );
+
+
+      const group =
+        new THREE.Group();
+
+
+      group.position.y =
+        y;
+
+
+      /*
+       * Tiny rotations add spatial
+       * depth without destroying
+       * chronological order.
+       */
+
+      group.rotation.z =
+        Math.sin(
+          index * 1.31
+        ) *
+        0.020;
+
+
+      group.rotation.x =
+        Math.cos(
+          index * 1.07
+        ) *
+        0.015;
+
+
+      group.userData.stats =
+        stats;
+
+
+      /*
+       * Main annual ring.
+       */
+
+      const tubeRadius =
+        0.018 +
+        intensity *
+          0.050;
+
+
+      const coreGeometry =
+        new THREE.TorusGeometry(
+          radius,
+          tubeRadius,
+          8,
+          128
+        );
+
+
+      const coreOpacity =
+        stats.complete
+          ? (
+              0.28 +
+              intensity *
+                0.67
+            )
+          : (
+              0.10 +
+              intensity *
+                0.32
+            );
+
+
+      const coreMaterial =
+        new THREE.MeshBasicMaterial({
+          color: color,
+          transparent: true,
+          opacity: coreOpacity,
+          blending:
+            THREE.AdditiveBlending,
+          depthWrite: false
+        });
+
+
+      const core =
+        new THREE.Mesh(
+          coreGeometry,
+          coreMaterial
+        );
+
+
+      /*
+       * TorusGeometry initially lies
+       * in XY. Rotate it so each year
+       * is parallel to the map plane.
+       */
+
+      core.rotation.x =
+        Math.PI / 2;
+
+
+      core.userData = {
+        stats,
+        role: "core",
+        baseOpacity:
+          coreOpacity
+      };
+
+
+      group.add(
+        core
+      );
+
+
+      /*
+       * Soft halo ring.
+       */
+
+      const haloGeometry =
+        new THREE.TorusGeometry(
+          radius,
+          tubeRadius * 3.4,
+          8,
+          128
+        );
+
+
+      const haloOpacity =
+        stats.complete
+          ? (
+              0.018 +
+              intensity *
+                0.105
+            )
+          : (
+              0.006 +
+              intensity *
+                0.040
+            );
+
+
+      const haloMaterial =
+        new THREE.MeshBasicMaterial({
+          color: color,
+          transparent: true,
+          opacity: haloOpacity,
+          blending:
+            THREE.AdditiveBlending,
+          depthWrite: false
+        });
+
+
+      const halo =
+        new THREE.Mesh(
+          haloGeometry,
+          haloMaterial
+        );
+
+
+      halo.rotation.x =
+        Math.PI / 2;
+
+
+      halo.userData = {
+        stats,
+        role: "halo",
+        baseOpacity:
+          haloOpacity
+      };
+
+
+      group.add(
+        halo
+      );
+
+
+      /*
+       * Invisible thick ring used
+       * only for mouse selection.
+       */
+
+      const pickGeometry =
+        new THREE.TorusGeometry(
+          radius,
+          0.13,
+          6,
+          96
+        );
+
+
+      const pickMaterial =
+        new THREE.MeshBasicMaterial({
+          transparent: true,
+          opacity: 0,
+          depthWrite: false
+        });
+
+
+      const pick =
+        new THREE.Mesh(
+          pickGeometry,
+          pickMaterial
+        );
+
+
+      pick.rotation.x =
+        Math.PI / 2;
+
+
+      pick.userData = {
+        stats,
+        role: "pick"
+      };
+
+
+      group.add(
+        pick
+      );
+
+
+      pickMeshes.push(
+        pick
+      );
+
+
+      yearObjects.push({
+        group,
+        core,
+        halo,
+        pick,
+        stats
+      });
+
+
+      temporalSphere.add(
+        group
+      );
+    }
+  );
+
+
+  /*
+   * Subtle particle atmosphere.
+   * Decorative only.
+   */
+
+  const particleCount =
+    650;
+
+
+  const positions =
+    new Float32Array(
+      particleCount * 3
+    );
+
+
+  let seed =
+    3917;
+
+
+  function random() {
+    seed =
+      (
+        seed *
+          1664525 +
+        1013904223
+      ) %
+      4294967296;
+
+
+    return (
+      seed /
+      4294967296
+    );
+  }
+
+
+  for (
+    let i = 0;
+    i < particleCount;
+    i += 1
+  ) {
+    const angle =
+      random() *
+      Math.PI *
+      2;
+
+
+    const radial =
+      1.45 +
+      random() *
+      1.18;
+
+
+    const y =
+      -2.0 +
+      random() *
+      4.0;
+
+
+    positions[
+      i * 3
+    ] =
+      Math.cos(angle) *
+      radial;
+
+
+    positions[
+      i * 3 + 1
+    ] =
+      y;
+
+
+    positions[
+      i * 3 + 2
+    ] =
+      Math.sin(angle) *
+      radial;
+  }
+
+
+  const particleGeometry =
+    new THREE.BufferGeometry();
+
+
+  particleGeometry.setAttribute(
+    "position",
+
+    new THREE.BufferAttribute(
+      positions,
+      3
     )
   );
 
-  blackout.setAttribute(
-    "fill",
-    "rgba(0,0,0,0.89)"
-  );
 
-  blackout.setAttribute(
-    "fill-rule",
-    "evenodd"
-  );
-
-  svg.appendChild(
-    blackout
-  );
+  const particleMaterial =
+    new THREE.PointsMaterial({
+      color: 0xd2edff,
+      size: 0.018,
+      transparent: true,
+      opacity: 0.15,
+      blending:
+        THREE.AdditiveBlending,
+      depthWrite: false
+    });
 
 
-  /*
-   * Shadow beneath the Hong Kong slab.
-   */
-
-  const shadow =
-    createSvgElement(
-      "path"
+  const particles =
+    new THREE.Points(
+      particleGeometry,
+      particleMaterial
     );
 
-  shadow.setAttribute(
-    "d",
-    boundaryPath
-  );
 
-  shadow.setAttribute(
-    "fill",
-    "rgba(0,0,0,0.52)"
-  );
-
-  shadow.setAttribute(
-    "stroke",
-    "#000000"
-  );
-
-  shadow.setAttribute(
-    "stroke-width",
-    "16"
-  );
-
-  shadow.setAttribute(
-    "transform",
-    "translate(0 55)"
-  );
-
-  shadow.style.filter =
-    "blur(10px)";
-
-  svg.appendChild(
-    shadow
+  temporalSphere.add(
+    particles
   );
 
 
-  /*
-   * Floating slab thickness.
-   */
-
-  const offsets =
-    [
-      48,
-      40,
-      32,
-      24,
-      16,
-      8
-    ];
-
-  offsets.forEach(
-    (
-      offset,
-      index
-    ) => {
-      const slab =
-        createSvgElement(
-          "path"
-        );
-
-      slab.setAttribute(
-        "d",
-        boundaryPath
-      );
-
-      slab.setAttribute(
-        "transform",
-        `translate(0 ${offset})`
-      );
-
-      slab.setAttribute(
-        "fill",
-        index < 2
-          ? "rgba(18,21,34,0.44)"
-          : "rgba(86,94,132,0.08)"
-      );
-
-      slab.setAttribute(
-        "stroke",
-        index < 3
-          ? "#525A78"
-          : "#AEB6FF"
-      );
-
-      slab.setAttribute(
-        "stroke-width",
-        "1"
-      );
-
-      slab.setAttribute(
-        "stroke-opacity",
-        String(
-          0.16 +
-          index * 0.045
-        )
-      );
-
-      svg.appendChild(
-        slab
-      );
-    }
-  );
-
-
-  /*
-   * Bright top edge.
-   */
-
-  const topEdge =
-    createSvgElement(
-      "path"
-    );
-
-  topEdge.setAttribute(
-    "d",
-    boundaryPath
-  );
-
-  topEdge.setAttribute(
-    "fill",
-    "rgba(150,158,210,0.05)"
-  );
-
-  topEdge.setAttribute(
-    "stroke",
-    "#E3E7FF"
-  );
-
-  topEdge.setAttribute(
-    "stroke-width",
-    "1.1"
-  );
-
-  topEdge.setAttribute(
-    "stroke-opacity",
-    "0.72"
-  );
-
-  svg.appendChild(
-    topEdge
-  );
+  updateYearAppearance();
 }
 
 
 /* =========================================================
-   EXPLORE STACK
+   CAMERA
    ========================================================= */
 
-function drawExploreStack(
-  svg,
-  calendar,
-  bounds,
-  height
-) {
-  const monthSummaries =
-    getMonthSummaries(
-      calendar
-    );
-
-  const layout =
-    getStackLayout(
-      calendar,
-      height
-    );
+function updateCamera() {
+  if (!camera) {
+    return;
+  }
 
 
-  const dayValues =
-    calendar.map(
-      item =>
-        item.record
-          ? item.record.value
-          : 0
-    );
+  const {
+    azimuth,
+    polar,
+    distance
+  } = orbit;
 
 
-  const dayCap =
-    percentileCap(
-      dayValues,
-      0.97
-    );
+  camera.position.set(
+    distance *
+      Math.sin(polar) *
+      Math.sin(azimuth),
+
+    distance *
+      Math.cos(polar),
+
+    distance *
+      Math.sin(polar) *
+      Math.cos(azimuth)
+  );
 
 
-  const monthCap =
-    percentileCap(
-      monthSummaries.map(
-        month =>
-          month.total
-      ),
-      1
-    );
+  camera.lookAt(
+    0,
+    0,
+    0
+  );
 
 
-  /*
-   * Find the strongest days.
-   * Only these receive expensive glow.
-   */
+  scheduleRender();
+}
 
-  const activeDays =
-    calendar
-      .filter(
-        item =>
-          item.record &&
-          item.record.value > 0
+
+/* =========================================================
+   MAP CAMERA
+   ========================================================= */
+
+function syncMapToOrbit() {
+  if (
+    !map ||
+    !map.loaded()
+  ) {
+    return;
+  }
+
+
+  const minPolar =
+    0.07;
+
+
+  const maxPolar =
+    1.25;
+
+
+  const progress =
+    Math.min(
+      1,
+
+      Math.max(
+        0,
+
+        (
+          orbit.polar -
+          minPolar
+        ) /
+        (
+          maxPolar -
+          minPolar
+        )
       )
-      .sort(
-        (a, b) =>
-          b.record.value -
-          a.record.value
-      );
-
-  const glowDays =
-    new Set(
-      activeDays
-        .slice(0, 12)
-        .map(
-          item =>
-            item.index
-        )
     );
 
 
   /*
-   * Daily layers
+   * Top view:
+   * pitch ≈ 0.
+   *
+   * As viewer drags downward,
+   * Hong Kong becomes a flat stage.
    */
 
-  const dailyGroup =
-    createSvgElement(
-      "g"
+  const pitch =
+    progress * 62;
+
+
+  const bearing =
+    -(
+      orbit.azimuth *
+      180 /
+      Math.PI
     );
 
-  dailyGroup.style.mixBlendMode =
-    "screen";
+
+  map.jumpTo({
+    pitch,
+    bearing
+  });
+}
 
 
-  calendar.forEach(
-    item => {
-      const value =
-        item.record
-          ? item.record.value
-          : 0;
+function scheduleMapSync() {
+  if (mapSyncQueued) {
+    return;
+  }
 
 
-      const intensity =
-        intensityForValue(
-          value,
-          dayCap
-        );
+  mapSyncQueued =
+    true;
 
 
-      const colour =
-        colourForPosition(
-          item.index /
-          Math.max(
-            1,
-            calendar.length - 1
-          )
-        );
+  requestAnimationFrame(
+    () => {
+      mapSyncQueued =
+        false;
 
-
-      const offset =
-        layerOffset(
-          item,
-          layout
-        );
-
-
-      const use =
-        createUse(
-          "hk-daily-outline"
-        );
-
-
-      use.setAttribute(
-        "transform",
-        `translate(0 ${offset.toFixed(2)})`
-      );
-
-
-      /*
-       * Zero days remain technically
-       * represented but nearly disappear.
-       */
-
-      if (
-        value <= 0
-      ) {
-        use.setAttribute(
-          "stroke",
-          colour
-        );
-
-        use.setAttribute(
-          "stroke-width",
-          "0.28"
-        );
-
-        use.setAttribute(
-          "stroke-opacity",
-          "0.012"
-        );
-      }
-
-      else {
-        const shaped =
-          Math.pow(
-            intensity,
-            0.70
-          );
-
-        use.setAttribute(
-          "stroke",
-          colour
-        );
-
-        use.setAttribute(
-          "stroke-width",
-          String(
-            0.42 +
-            shaped * 1.35
-          )
-        );
-
-        use.setAttribute(
-          "stroke-opacity",
-          String(
-            0.12 +
-            shaped * 0.68
-          )
-        );
-
-
-        /*
-         * Glow only the strongest
-         * twelve days of the year.
-         */
-
-        if (
-          glowDays.has(
-            item.index
-          )
-        ) {
-          use.setAttribute(
-            "filter",
-            "url(#lightning-strong-glow)"
-          );
-        }
-      }
-
-
-      dailyGroup.appendChild(
-        use
-      );
+      syncMapToOrbit();
     }
-  );
-
-
-  svg.appendChild(
-    dailyGroup
-  );
-
-
-  /*
-   * MONTHLY SUMMARY LAYERS
-   *
-   * Each month receives one stronger
-   * Hong Kong contour.
-   *
-   * This gives the stack a readable
-   * Year → Month → Day hierarchy.
-   */
-
-  const monthlyGroup =
-    createSvgElement(
-      "g"
-    );
-
-  monthlyGroup.style.mixBlendMode =
-    "screen";
-
-
-  monthSummaries.forEach(
-    month => {
-      const firstDay =
-        calendar[
-          month.startIndex
-        ];
-
-      if (!firstDay) {
-        return;
-      }
-
-      const intensity =
-        intensityForValue(
-          month.total,
-          monthCap
-        );
-
-
-      const colour =
-        colourForPosition(
-          month.startIndex /
-          Math.max(
-            1,
-            calendar.length - 1
-          )
-        );
-
-
-      const offset =
-        layerOffset(
-          firstDay,
-          layout
-        );
-
-
-      const monthLayer =
-        createUse(
-          "hk-daily-outline"
-        );
-
-
-      monthLayer.setAttribute(
-        "transform",
-        `translate(0 ${offset.toFixed(2)})`
-      );
-
-      monthLayer.setAttribute(
-        "stroke",
-        colour
-      );
-
-      monthLayer.setAttribute(
-        "stroke-width",
-        String(
-          0.85 +
-          intensity * 2.0
-        )
-      );
-
-      monthLayer.setAttribute(
-        "stroke-opacity",
-        String(
-          0.30 +
-          intensity * 0.52
-        )
-      );
-
-
-      monthlyGroup.appendChild(
-        monthLayer
-      );
-
-
-      /*
-       * Month label
-       */
-
-      const text =
-        createSvgElement(
-          "text"
-        );
-
-      const labelX =
-        Math.max(
-          32,
-          bounds.minX - 42
-        );
-
-
-      const labelY =
-        bounds.maxY +
-        offset -
-        4;
-
-
-      text.setAttribute(
-        "x",
-        labelX
-      );
-
-      text.setAttribute(
-        "y",
-        labelY
-      );
-
-      text.setAttribute(
-        "fill",
-        colour
-      );
-
-      text.setAttribute(
-        "fill-opacity",
-        "0.92"
-      );
-
-      text.setAttribute(
-        "font-size",
-        "10"
-      );
-
-      text.setAttribute(
-        "font-family",
-        "Arial, Helvetica, sans-serif"
-      );
-
-      text.setAttribute(
-        "font-weight",
-        "700"
-      );
-
-      text.setAttribute(
-        "letter-spacing",
-        "1.5"
-      );
-
-      text.setAttribute(
-        "text-anchor",
-        "end"
-      );
-
-      text.textContent =
-        month.name;
-
-
-      svg.appendChild(
-        text
-      );
-    }
-  );
-
-
-  svg.appendChild(
-    monthlyGroup
   );
 }
 
@@ -1870,397 +1133,1017 @@ function drawExploreStack(
    RENDER
    ========================================================= */
 
-function renderVisualisation() {
+function resizeRenderer() {
   if (
-    !coastlineGeoJSON ||
-    !boundaryGeoJSON ||
-    lightningRecords.length === 0
+    !renderer ||
+    !camera
   ) {
     return;
   }
-
-
-  const svg =
-    ensureSvg();
-
-  clearSvg(
-    svg
-  );
 
 
   const container =
     map.getContainer();
 
+
   const width =
-    container.clientWidth;
+    Math.max(
+      1,
+      container.clientWidth
+    );
+
 
   const height =
-    container.clientHeight;
-
-
-  svg.setAttribute(
-    "viewBox",
-    `0 0 ${width} ${height}`
-  );
-
-
-  const coastlinePaths =
-    projectedCoastlinePaths();
-
-  const boundaryRings =
-    projectedBoundaryRings();
-
-
-  const coastlinePath =
-    pathsToSvgPath(
-      coastlinePaths,
-      false
-    );
-
-  const boundaryPath =
-    pathsToSvgPath(
-      boundaryRings,
-      true
+    Math.max(
+      1,
+      container.clientHeight
     );
 
 
-  const bounds =
-    projectedBounds(
-      boundaryRings
-    );
-
-
-  if (
-    !coastlinePath ||
-    !boundaryPath ||
-    !bounds
-  ) {
-    return;
-  }
-
-
-  /*
-   * Build the Hong Kong outline ONCE.
-   */
-
-  buildDefinitions(
-    svg,
-    coastlinePath
-  );
-
-
-  if (
-    viewMode ===
-    "overview"
-  ) {
-    drawOverview(
-      svg
-    );
-
-    return;
-  }
-
-
-  drawExploreEnvironment(
-    svg,
-    boundaryPath,
+  renderer.setSize(
     width,
-    height
+    height,
+    false
   );
 
 
-  const calendar =
-    buildCalendarYear(
-      selectedYear
-    );
+  camera.aspect =
+    width / height;
 
 
-  drawExploreStack(
-    svg,
-    calendar,
-    bounds,
-    height
-  );
+  camera.updateProjectionMatrix();
+
+
+  scheduleRender();
 }
 
 
-/* =========================================================
-   CAMERA / PERFORMANCE
-   ========================================================= */
-
-function setOverlayOpacity(
-  opacity
-) {
-  const svg =
-    document.getElementById(
-      "lightning-stack"
-    );
-
-  if (svg) {
-    svg.style.opacity =
-      String(opacity);
-  }
-}
-
-
-/*
- * IMPORTANT:
- *
- * We deliberately DO NOT redraw on:
- *
- * map.on("move")
- *
- * anymore.
- *
- * During camera motion the existing
- * overlay simply fades down.
- *
- * Geometry is recalculated ONCE
- * when the camera stops.
- */
-
-function attachMapPerformanceEvents() {
-  map.on(
-    "movestart",
-    () => {
-      setOverlayOpacity(
-        0.12
-      );
-    }
-  );
-
-
-  map.on(
-    "moveend",
-    () => {
-      renderVisualisation();
-
-      requestAnimationFrame(
-        () => {
-          setOverlayOpacity(
-            1
-          );
-        }
-      );
-    }
-  );
-
-
-  map.on(
-    "resize",
-    () => {
-      renderVisualisation();
-    }
-  );
-}
-
-
-/* =========================================================
-   INTERACTION
-   ========================================================= */
-
-function clickIsOnHongKong(
-  event
-) {
+function scheduleRender() {
   if (
-    !map.getLayer(
-      HK_LAYER_ID
-    )
-  ) {
-    return false;
-  }
-
-  return (
-    map.queryRenderedFeatures(
-      event.point,
-      {
-        layers: [
-          HK_LAYER_ID
-        ]
-      }
-    ).length > 0
-  );
-}
-
-
-function enterExploreMode() {
-  if (
-    viewMode ===
-    "explore"
+    renderQueued ||
+    !renderer ||
+    !scene ||
+    !camera
   ) {
     return;
   }
 
 
-  viewMode =
-    "explore";
-
-
-  /*
-   * No SVG reconstruction while
-   * this camera animation runs.
-   */
-
-  map.easeTo({
-    center: [
-      114.15,
-      22.34
-    ],
-
-    zoom:
-      9.95,
-
-    pitch:
-      57,
-
-    bearing:
-      -18,
-
-    duration:
-      1350,
-
-    essential:
-      true
-  });
-}
-
-
-function leaveExploreMode() {
-  viewMode =
-    "overview";
-
-  /*
-   * Existing Reset button will also
-   * move the camera. moveend will
-   * redraw the lightweight overview.
-   */
-
-  setTimeout(
-    () => {
-      if (
-        !map.isMoving()
-      ) {
-        renderVisualisation();
-        setOverlayOpacity(1);
-      }
-    },
-    80
-  );
-}
-
-
-function attachInteraction() {
-  if (
-    interactionAttached
-  ) {
-    return;
-  }
-
-  interactionAttached =
+  renderQueued =
     true;
 
 
-  map.on(
-    "click",
-    event => {
+  requestAnimationFrame(
+    () => {
+      renderQueued =
+        false;
+
+
+      renderer.render(
+        scene,
+        camera
+      );
+    }
+  );
+}
+
+
+/* =========================================================
+   INFORMATION PANEL
+   ========================================================= */
+
+function ensureInterface() {
+  const container =
+    map.getContainer();
+
+
+  document
+    .getElementById(
+      "temporal-sphere-info"
+    )
+    ?.remove();
+
+
+  document
+    .getElementById(
+      "temporal-sphere-hint"
+    )
+    ?.remove();
+
+
+  if (
+    !document.getElementById(
+      "temporal-sphere-style"
+    )
+  ) {
+    const style =
+      document.createElement(
+        "style"
+      );
+
+
+    style.id =
+      "temporal-sphere-style";
+
+
+    style.textContent = `
+      #temporal-sphere-info {
+        position: absolute;
+        top: 32px;
+        right: 72px;
+        width: 230px;
+        z-index: 12;
+        pointer-events: none;
+        color: #f4f5ff;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      #temporal-sphere-info .eyebrow {
+        margin-bottom: 10px;
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        color: rgba(200, 220, 255, 0.58);
+      }
+
+      #temporal-sphere-info .year {
+        font-size: 34px;
+        line-height: 1;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+      }
+
+      #temporal-sphere-info .count {
+        margin-top: 9px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: rgba(225, 231, 255, 0.88);
+      }
+
+      #temporal-sphere-info .meta {
+        margin-top: 12px;
+        font-size: 10px;
+        line-height: 1.65;
+        letter-spacing: 0.08em;
+        color: rgba(190, 201, 231, 0.60);
+      }
+
+      #temporal-sphere-hint {
+        position: absolute;
+        left: 50%;
+        bottom: 30px;
+        transform: translateX(-50%);
+        z-index: 12;
+        pointer-events: none;
+
+        padding: 9px 13px;
+        border:
+          1px solid rgba(
+            190,
+            210,
+            255,
+            0.17
+          );
+
+        border-radius: 999px;
+
+        background:
+          rgba(
+            3,
+            5,
+            11,
+            0.55
+          );
+
+        backdrop-filter:
+          blur(8px);
+
+        color:
+          rgba(
+            223,
+            231,
+            255,
+            0.72
+          );
+
+        font-family:
+          Arial,
+          Helvetica,
+          sans-serif;
+
+        font-size: 9px;
+
+        letter-spacing:
+          0.16em;
+
+        white-space:
+          nowrap;
+      }
+    `;
+
+
+    document.head.appendChild(
+      style
+    );
+  }
+
+
+  const info =
+    document.createElement(
+      "div"
+    );
+
+
+  info.id =
+    "temporal-sphere-info";
+
+
+  info.innerHTML = `
+    <div class="eyebrow">
+      TEMPORAL LIGHT FIELD
+    </div>
+
+    <div
+      class="year"
+      id="sphere-year"
+    >
+      2005–2026
+    </div>
+
+    <div
+      class="count"
+      id="sphere-count"
+    >
+      22 annual slices
+    </div>
+
+    <div
+      class="meta"
+      id="sphere-meta"
+    >
+      DRAG TO ROTATE<br>
+      SCROLL TO ZOOM<br>
+      2005 PARTIAL · 2026 YTD
+    </div>
+  `;
+
+
+  container.appendChild(
+    info
+  );
+
+
+  const hint =
+    document.createElement(
+      "div"
+    );
+
+
+  hint.id =
+    "temporal-sphere-hint";
+
+
+  hint.textContent =
+    "DRAG TO REVEAL THE TIME SLICES";
+
+
+  container.appendChild(
+    hint
+  );
+
+
+  updateInfoPanel();
+}
+
+
+function updateInfoPanel() {
+  const yearElement =
+    document.getElementById(
+      "sphere-year"
+    );
+
+
+  const countElement =
+    document.getElementById(
+      "sphere-count"
+    );
+
+
+  const metaElement =
+    document.getElementById(
+      "sphere-meta"
+    );
+
+
+  if (
+    !yearElement ||
+    !countElement ||
+    !metaElement
+  ) {
+    return;
+  }
+
+
+  const activeYear =
+    selectedYear ??
+    hoveredYear;
+
+
+  if (
+    activeYear === null
+  ) {
+    yearElement.textContent =
+      "2005–2026";
+
+
+    countElement.textContent =
+      "22 annual slices";
+
+
+    metaElement.innerHTML =
+      "DRAG TO ROTATE<br>" +
+      "SCROLL TO ZOOM<br>" +
+      "2005 PARTIAL · 2026 YTD";
+
+
+    return;
+  }
+
+
+  const stats =
+    annualStats.find(
+      item =>
+        item.year ===
+        activeYear
+    );
+
+
+  if (!stats) {
+    return;
+  }
+
+
+  yearElement.textContent =
+    String(
+      stats.year
+    );
+
+
+  countElement.innerHTML =
+    `<strong>${stats.total.toLocaleString()}</strong> lightning strikes`;
+
+
+  metaElement.innerHTML =
+    `${stats.activeDays.toLocaleString()} ACTIVE DAYS<br>` +
+    `PEAK ${stats.peakValue.toLocaleString()} · ${stats.peakDate}<br>` +
+    (
+      stats.complete
+        ? "COMPLETE YEAR"
+        : stats.partialLabel
+    );
+}
+
+
+/* =========================================================
+   YEAR HIGHLIGHT
+   ========================================================= */
+
+function updateYearAppearance() {
+  yearObjects.forEach(
+    item => {
+      const isSelected =
+        selectedYear ===
+        item.stats.year;
+
+
+      const isHovered =
+        hoveredYear ===
+        item.stats.year;
+
+
       if (
-        viewMode ===
-        "overview" &&
-        clickIsOnHongKong(
-          event
-        )
+        selectedYear !== null
       ) {
-        enterExploreMode();
+        item.core.material.opacity =
+          isSelected
+            ? 1
+            : 0.045;
+
+
+        item.halo.material.opacity =
+          isSelected
+            ? 0.26
+            : 0.005;
+
+
+        item.group.scale.setScalar(
+          isSelected
+            ? 1.025
+            : 1
+        );
+      }
+
+      else {
+        item.core.material.opacity =
+          isHovered
+            ? Math.min(
+                1,
+
+                item.core
+                  .userData
+                  .baseOpacity *
+                  1.70
+              )
+            : item.core
+                .userData
+                .baseOpacity;
+
+
+        item.halo.material.opacity =
+          isHovered
+            ? Math.min(
+                0.30,
+
+                item.halo
+                  .userData
+                  .baseOpacity *
+                  2.25
+              )
+            : item.halo
+                .userData
+                .baseOpacity;
+
+
+        item.group.scale.setScalar(
+          isHovered
+            ? 1.018
+            : 1
+        );
       }
     }
   );
 
 
-  map.on(
-    "mousemove",
+  updateInfoPanel();
+  scheduleRender();
+}
+
+
+/* =========================================================
+   RAYCAST
+   ========================================================= */
+
+function setMouseFromEvent(
+  event
+) {
+  const container =
+    map.getContainer();
+
+
+  const rect =
+    container.getBoundingClientRect();
+
+
+  mouse.x =
+    (
+      (
+        event.clientX -
+        rect.left
+      ) /
+      rect.width
+    ) *
+      2 -
+    1;
+
+
+  mouse.y =
+    -(
+      (
+        event.clientY -
+        rect.top
+      ) /
+      rect.height
+    ) *
+      2 +
+    1;
+}
+
+
+function yearFromPointer(
+  event
+) {
+  if (
+    !camera ||
+    !raycaster
+  ) {
+    return null;
+  }
+
+
+  setMouseFromEvent(
+    event
+  );
+
+
+  raycaster.setFromCamera(
+    mouse,
+    camera
+  );
+
+
+  const hits =
+    raycaster.intersectObjects(
+      pickMeshes,
+      false
+    );
+
+
+  if (!hits.length) {
+    return null;
+  }
+
+
+  return (
+    hits[0]
+      .object
+      .userData
+      .stats
+      ?.year ??
+    null
+  );
+}
+
+
+/* =========================================================
+   ORBIT CONTROL
+   ========================================================= */
+
+function shouldIgnorePointer(
+  event
+) {
+  const target =
+    event.target instanceof Element
+      ? event.target
+      : null;
+
+
+  return Boolean(
+    target?.closest(
+      "button, a, .maplibregl-ctrl"
+    )
+  );
+}
+
+
+function attachOrbitControls() {
+  if (controlsAttached) {
+    return;
+  }
+
+
+  controlsAttached =
+    true;
+
+
+  const container =
+    map.getContainer();
+
+
+  container.style.touchAction =
+    "none";
+
+
+  /*
+   * Our own drag controls rotate both
+   * the temporal object and the map.
+   */
+
+  map.dragPan?.disable();
+  map.dragRotate?.disable();
+  map.scrollZoom?.disable();
+  map.doubleClickZoom?.disable();
+  map.keyboard?.disable();
+  map.touchZoomRotate?.disable();
+
+
+  container.addEventListener(
+    "pointerdown",
     event => {
       if (
-        viewMode ===
-        "explore"
+        shouldIgnorePointer(
+          event
+        )
       ) {
-        map.getCanvas()
-          .style.cursor =
-            "grab";
+        return;
+      }
+
+
+      pointer.down =
+        true;
+
+
+      pointer.id =
+        event.pointerId;
+
+
+      pointer.x =
+        event.clientX;
+
+
+      pointer.y =
+        event.clientY;
+
+
+      pointer.moved =
+        false;
+
+
+      container.setPointerCapture?.(
+        event.pointerId
+      );
+
+
+      container.style.cursor =
+        "grabbing";
+    }
+  );
+
+
+  container.addEventListener(
+    "pointermove",
+    event => {
+      if (
+        !pointer.down
+      ) {
+        const year =
+          yearFromPointer(
+            event
+          );
+
+
+        if (
+          year !== hoveredYear
+        ) {
+          hoveredYear =
+            year;
+
+          updateYearAppearance();
+        }
+
+
+        container.style.cursor =
+          year !== null
+            ? "pointer"
+            : "grab";
+
 
         return;
       }
 
 
-      map.getCanvas()
-        .style.cursor =
-          clickIsOnHongKong(
-            event
+      const dx =
+        event.clientX -
+        pointer.x;
+
+
+      const dy =
+        event.clientY -
+        pointer.y;
+
+
+      if (
+        Math.abs(dx) +
+          Math.abs(dy) >
+        2
+      ) {
+        pointer.moved =
+          true;
+      }
+
+
+      /*
+       * Horizontal:
+       * unlimited 360° rotation.
+       */
+
+      orbit.azimuth -=
+        dx * 0.0062;
+
+
+      /*
+       * Vertical:
+       * always remain above the
+       * Hong Kong map plane.
+       */
+
+      orbit.polar +=
+        dy * 0.0052;
+
+
+      orbit.polar =
+        Math.min(
+          1.25,
+
+          Math.max(
+            0.07,
+            orbit.polar
           )
-            ? "pointer"
-            : "";
+        );
+
+
+      pointer.x =
+        event.clientX;
+
+
+      pointer.y =
+        event.clientY;
+
+
+      updateCamera();
+      scheduleMapSync();
+
+
+      const hint =
+        document.getElementById(
+          "temporal-sphere-hint"
+        );
+
+
+      if (
+        hint &&
+        orbit.polar >
+          0.18
+      ) {
+        hint.textContent =
+          "ANNUAL SLICES REVEALED · CLICK A RING TO INSPECT";
+      }
     }
   );
 
 
-  document
-    .getElementById(
-      "reset-view"
-    )
-    ?.addEventListener(
-      "click",
-      () => {
-        leaveExploreMode();
+  container.addEventListener(
+    "pointerup",
+    event => {
+      if (
+        !pointer.down
+      ) {
+        return;
       }
-    );
 
 
-  attachMapPerformanceEvents();
+      if (
+        !pointer.moved
+      ) {
+        const year =
+          yearFromPointer(
+            event
+          );
+
+
+        selectedYear =
+          year === selectedYear
+            ? null
+            : year;
+
+
+        updateYearAppearance();
+      }
+
+
+      pointer.down =
+        false;
+
+
+      pointer.id =
+        null;
+
+
+      container.style.cursor =
+        "grab";
+    }
+  );
+
+
+  container.addEventListener(
+    "pointercancel",
+    () => {
+      pointer.down =
+        false;
+
+      pointer.id =
+        null;
+
+      container.style.cursor =
+        "grab";
+    }
+  );
+
+
+  container.addEventListener(
+    "wheel",
+    event => {
+      if (
+        shouldIgnorePointer(
+          event
+        )
+      ) {
+        return;
+      }
+
+
+      event.preventDefault();
+
+
+      orbit.distance +=
+        event.deltaY *
+        0.0035;
+
+
+      orbit.distance =
+        Math.min(
+          10.5,
+
+          Math.max(
+            4.8,
+            orbit.distance
+          )
+        );
+
+
+      updateCamera();
+    },
+
+    {
+      passive: false
+    }
+  );
 }
 
 
 /* =========================================================
-   START
+   RESET
    ========================================================= */
 
-async function initialiseLightning() {
+function resetScene() {
+  orbit.azimuth =
+    DEFAULT_ORBIT.azimuth;
+
+
+  orbit.polar =
+    DEFAULT_ORBIT.polar;
+
+
+  orbit.distance =
+    DEFAULT_ORBIT.distance;
+
+
+  selectedYear =
+    null;
+
+
+  hoveredYear =
+    null;
+
+
+  map.jumpTo({
+    center:
+      HK_CENTER,
+
+    zoom:
+      9.75,
+
+    pitch:
+      0,
+
+    bearing:
+      0
+  });
+
+
+  updateCamera();
+  updateYearAppearance();
+
+
+  const hint =
+    document.getElementById(
+      "temporal-sphere-hint"
+    );
+
+
+  if (hint) {
+    hint.textContent =
+      "DRAG TO REVEAL THE TIME SLICES";
+  }
+}
+
+
+/* =========================================================
+   INITIALISE
+   ========================================================= */
+
+async function initialiseTemporalSphere() {
+  /*
+   * Load Three.js and the HKO data
+   * in parallel.
+   */
+
   const [
-    _,
-    coastline,
-    boundary
+    threeModule,
+    csvText
   ] =
     await Promise.all([
-      loadLightningData(),
-
-      loadJSON(
-        COASTLINE_PATH
+      import(
+        "https://cdn.jsdelivr.net/npm/three@0.180.0/+esm"
       ),
 
-      loadJSON(
-        BOUNDARY_PATH
+      loadText(
+        LIGHTNING_DATA_PATH
       )
     ]);
 
 
-  coastlineGeoJSON =
-    coastline;
-
-  boundaryGeoJSON =
-    boundary;
+  THREE =
+    threeModule;
 
 
-  showYearSummary(
-    DEFAULT_YEAR
+  parseLightningData(
+    csvText
   );
+
+
+  buildAnnualStats();
 
 
   const start =
     () => {
-      renderVisualisation();
+      /*
+       * Scene 01:
+       * top-down Hong Kong.
+       */
 
-      attachInteraction();
+      map.jumpTo({
+        center:
+          HK_CENTER,
+
+        zoom:
+          9.75,
+
+        pitch:
+          0,
+
+        bearing:
+          0
+      });
+
+
+      createRenderer();
+      createScene();
+
+      buildTemporalSphere();
+
+      ensureInterface();
+
+      resizeRenderer();
+
+      attachOrbitControls();
+
+
+      document
+        .getElementById(
+          "reset-view"
+        )
+        ?.addEventListener(
+          "click",
+          resetScene
+        );
+
+
+      const resizeObserver =
+        new ResizeObserver(
+          resizeRenderer
+        );
+
+
+      resizeObserver.observe(
+        map.getContainer()
+      );
+
+
+      /*
+       * Re-render our Three.js layer
+       * whenever MapLibre renders.
+       */
+
+      map.on(
+        "render",
+        scheduleRender
+      );
+
+
+      scheduleRender();
+
 
       console.log(
-        "Thunder Rhythm optimised month-day stack ready."
+        "Thunder Rhythm temporal sphere ready."
       );
     };
 
@@ -2280,12 +2163,10 @@ async function initialiseLightning() {
 }
 
 
-initialiseLightning()
-  .catch(
-    error => {
-      console.error(
-        "Lightning visualisation error:",
-        error
-      );
-    }
-  );
+initialiseTemporalSphere()
+  .catch(error => {
+    console.error(
+      "Temporal sphere error:",
+      error
+    );
+  });
