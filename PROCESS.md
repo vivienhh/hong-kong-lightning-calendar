@@ -242,3 +242,139 @@ The key idea can currently be summarised as:
 > Twenty-two years accumulate above Hong Kong as a moving temporal field of lightning.
 
 The next step is to replace the current stacked annual torus prototype with a lightweight nested particle architecture while preserving the working map, camera interaction, annual data processing, and 360-degree viewing controls.
+
+### First nested particle sphere test
+
+After confirming that the MapLibre map and Three.js temporal object could work together, I replaced the stacked annual torus structure with a first nested particle-based prototype.
+
+The new prototype uses the original daily lightning dataset to build a deeper temporal hierarchy. Each year contains twelve monthly systems, while each month is associated with its recorded daily values. The intention was to move away from large solid annual rings and toward a more volumetric, continuously moving field made from smaller temporal units.
+
+This experiment successfully changed the overall form from a vertical stack into a more spherical three-dimensional object. It also confirmed that the browser could animate multiple year systems and daily instances while preserving the existing 360-degree camera interaction and Hong Kong map.
+
+However, the first visual test revealed several important problems.
+
+#### 1. The temporal sphere is too large
+
+The current sphere is large enough to surround most of Hong Kong. This makes the map appear to sit inside a data cage or shell.
+
+This is not the intended relationship.
+
+The Hong Kong map should remain the geographic base, while the temporal sphere should appear as a smaller independent data sculpture floating above the centre of Hong Kong.
+
+In the next iteration, the sphere should be reduced substantially in scale, approximately to around one third of the main visible width of Hong Kong, and positioned higher above the map plane.
+
+From the top view it should initially appear as a concentrated luminous area above Hong Kong. When the camera angle is lowered, its three-dimensional volume should become visible.
+
+#### 2. Structural orbit lines are too visible
+
+The current prototype displays many year and month orbit lines. These were useful while testing the structure, but visually they dominate the object and make the sphere look like a wire cage.
+
+The visible lines are therefore functioning more like construction guides than part of the intended final visual language.
+
+The final system should not explicitly draw the paths that organise the data.
+
+Instead, the temporal hierarchy should be perceived from the arrangement of the light elements themselves.
+
+In other words:
+
+- a year should not be represented by one visible large orbit line;
+- a year should be formed by twelve monthly light rings;
+- a month should not need a visible supporting orbit;
+- a month should be formed by approximately 28–31 daily light units.
+
+The invisible orbital structure can still be used mathematically to position and animate the elements, but it should not appear as a dominant visual object.
+
+#### 3. The nested hierarchy is not yet visually readable
+
+The conceptual hierarchy is:
+
+Temporal sphere
+→ years
+→ 12 months per year
+→ 28–31 days per month.
+
+However, in the current prototype this hierarchy is still difficult to perceive visually.
+
+The next version should make the nesting itself become the visible form.
+
+A single year should appear as a system of twelve luminous monthly rings arranged around an invisible circular path.
+
+Each monthly ring should then be constructed from its daily values. The daily units should behave like small luminous rings or cells arranged around the month.
+
+Therefore:
+
+22 year systems
+→ each formed from 12 month rings
+
+12 month rings
+→ each formed from 28–31 daily light cells
+
+Daily light cell
+→ one real recorded daily lightning count.
+
+The supporting geometry should disappear, leaving only the nested light structures.
+
+#### 4. Daily motion currently exists but is visually difficult to perceive
+
+The current implementation already animates daily instances, but the movement is difficult to recognise because the sphere is too large, the individual elements are too subtle, and the visible structural lines dominate the composition.
+
+The next motion system should make the orbital behaviour clearer without becoming chaotic.
+
+The intended motion is hierarchical:
+
+- the complete temporal sphere rotates very slowly;
+- individual year systems have slightly different orientations and slow precession;
+- monthly systems rotate around their annual structure;
+- daily light cells move around their monthly rings;
+- strong lightning days remain brighter and more visually prominent than quiet days.
+
+The animation should create the impression of a living orbital system rather than a random particle explosion.
+
+Importantly, animation must not change the underlying data relationship. A day with zero or very low lightning activity should never become visually stronger than a genuinely active day simply because of animation.
+
+#### 5. The map and sphere need a clearer spatial relationship
+
+The current sphere visually competes with and encloses the Hong Kong map.
+
+The intended composition is instead:
+
+Temporal data sphere
+floating above
+
+↓
+
+Hong Kong map
+as geographic stage.
+
+The map answers “where”.
+
+The temporal sphere answers “when” and “how much”.
+
+The next iteration should therefore create clearer vertical separation between the two objects and allow the user to understand the sphere as something suspended above Hong Kong rather than wrapped around it.
+
+#### Revised visual direction
+
+The current test suggests that the final global view should not be built from visible orbital lines.
+
+Instead, it should be built from nested luminous units:
+
+Daily micro-rings
+→ form monthly rings
+
+Monthly rings
+→ form annual systems
+
+Annual systems
+→ collectively form the temporal sphere.
+
+The resulting sphere should feel particle-like, luminous, orbital, and continuously moving. Its spherical appearance should emerge from the distribution and motion of the temporal elements rather than from a large visible spherical boundary or wire structure.
+
+The next prototype will therefore focus on:
+
+1. reducing the overall sphere scale;
+2. lifting it above the Hong Kong map;
+3. removing visible year and month construction lines;
+4. making the twelve monthly rings the visible structure of each year;
+5. constructing each monthly ring from daily luminous units;
+6. making nested orbital motion visually clearer;
+7. preserving lightweight rendering so that the full daily dataset remains interactive.
