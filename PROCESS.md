@@ -575,3 +575,90 @@ The 2025 test contains all 365 daily records.
 This version is much closer to the intended visual language because temporal hierarchy is now embedded directly into the geometry rather than added as decorative orbiting objects.
 
 The next step is to refine the scale, ripple amplitude, motion speed, and overall visual balance of the Month modules before extending the successful single-year system to all 22 years from 2005 to 2026.
+
+
+### Refining the 2025 concentric month ripple system
+
+After confirming the concentric Month → Day structure, I refined the visual scale and luminous quality of the 2025 prototype.
+
+The underlying hierarchy remained unchanged:
+
+Year
+→ 12 Month ripple systems
+→ 28–31 concentric Daily rings per month.
+
+Each daily ring still represents one date, ordered from the centre outward:
+
+Day 01
+→ innermost ring
+
+Final day of the month
+→ outermost ring
+
+Lightning magnitude continues to control ring brightness, thickness, and glow.
+
+#### Refining the Month scale
+
+In the first concentric ripple prototype, the Month systems were structurally clear but appeared slightly too small relative to the annual orbit.
+
+I therefore increased the overall Month radius while keeping the Year orbit unchanged.
+
+This made the Month systems more visually significant and helped the 28–31 daily rings read as one coherent temporal module rather than a small decorative detail.
+
+#### Refining line weight and light diffusion
+
+The Daily rings were also slightly too delicate.
+
+Their line thickness was increased while preserving the difference between weak and strong lightning days.
+
+The glow system was expanded using multiple luminous layers:
+
+- a brighter core data ring;
+- a wider translucent halo;
+- an additional soft outer halo for stronger lightning days.
+
+This produces a softer diffusion of light around high-activity dates without turning the complete Month system into a solid white shape.
+
+The intention is that strong lightning days feel energetic and luminous, while low-activity days remain thin and quiet.
+
+#### Current 2025 module
+
+The current 2025 prototype now contains:
+
+- one luminous annual orbit;
+- twelve enlarged Month ripple systems;
+- 365 real daily lightning records;
+- Processing-inspired ripple motion;
+- data-driven ring thickness, brightness, and glow.
+
+At this stage, the single-year module is visually stable enough to test at the next scale.
+
+Rather than continuing to optimise one year in isolation, the next experiment will combine the complete 2005–2026 dataset.
+
+### Next direction: 22-year kinetic composition
+
+The next prototype will investigate how 22 annual systems can coexist in one three-dimensional composition.
+
+A generative geometry reference from OpenProcessing suggests a useful spatial direction: multiple circular systems can share a common centre while using different radii, orientations, phases, and rotation speeds.
+
+The goal is not to reproduce the reference literally, but to adapt its layered kinetic geometry to the temporal structure of the Hong Kong lightning dataset.
+
+Each visible annual system will correspond to one real year from 2005 to 2026.
+
+The current Year → Month → Day structure will remain intact inside every year:
+
+Year
+→ twelve Month ripple systems
+→ daily concentric rings.
+
+The 22 annual systems will then be arranged as a layered kinetic temporal field rather than as a solid sphere.
+
+The main questions for the next prototype are:
+
+- how much annual radius should change across 2005–2026;
+- how the 22 annual planes should be tilted and rotated;
+- how different rotation speeds can create a coherent kinetic structure;
+- how much glow should remain visible when all years overlap;
+- whether the complete composition still preserves enough negative space to remain readable.
+
+The Hong Kong map will remain temporarily excluded until the 22-year temporal structure is visually resolved.

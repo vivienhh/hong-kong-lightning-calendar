@@ -1,8 +1,9 @@
 /* =========================================================
    THUNDER RHYTHM
-   PROTOTYPE 03
+   PROTOTYPE 03.1
 
    2025 CONCENTRIC MONTH RIPPLE TEST
+   Larger + More Luminous Refinement
 
    Structure:
 
@@ -26,9 +27,11 @@
    Motion inspired by:
    OpenProcessing "Floating"
 
-   Each Daily ring receives a different
-   Z-axis phase, producing a continuous
-   ripple / bowl / breathing-disc effect.
+   Refinements in 03.1:
+   - larger Month ripple discs
+   - thicker Daily rings
+   - wider glow diffusion
+   - stronger ripple depth
 
    No Hong Kong map.
    No other years yet.
@@ -38,7 +41,9 @@
 const LIGHTNING_DATA_PATH =
   "./data/daily_HK_LGTG_ALL.csv";
 
-const TARGET_YEAR = 2025;
+const TARGET_YEAR =
+  2025;
+
 
 const MONTH_NAMES = [
   "JAN",
@@ -61,64 +66,104 @@ const MONTH_NAMES = [
    ========================================================= */
 
 /*
- * The large 2025 Year orbit.
+ * Large annual carrier orbit.
  */
-const YEAR_RADIUS = 2.0;
+const YEAR_RADIUS =
+  2.0;
 
 
 /*
- * Each Month becomes one concentric
- * ripple disc.
- */
-const MONTH_INNER_RADIUS = 0.040;
-const MONTH_OUTER_RADIUS = 0.34;
-
-const MONTH_COUNT = 12;
-
-
-/*
- * Maximum depth of the Month ripple.
+ * Each Month is one concentric
+ * Day-ring ripple system.
  *
- * Outer rings move slightly more
- * than inner rings, creating a more
- * readable three-dimensional wave.
+ * Prototype 03:
+ * outer radius = 0.34
+ *
+ * Prototype 03.1:
+ * outer radius = 0.42
+ *
+ * This makes each Month system
+ * about 24% larger.
  */
-const RIPPLE_INNER_AMPLITUDE = 0.045;
-const RIPPLE_OUTER_AMPLITUDE = 0.105;
+const MONTH_INNER_RADIUS =
+  0.050;
+
+const MONTH_OUTER_RADIUS =
+  0.42;
+
+
+const MONTH_COUNT =
+  12;
+
+
+/*
+ * Stronger ripple depth to match
+ * the enlarged Month modules.
+ */
+const RIPPLE_INNER_AMPLITUDE =
+  0.055;
+
+const RIPPLE_OUTER_AMPLITUDE =
+  0.135;
 
 
 /* =========================================================
    THREE / GLOBAL STATE
    ========================================================= */
 
-let THREE = null;
+let THREE =
+  null;
 
-let renderer = null;
-let scene = null;
-let camera = null;
+let renderer =
+  null;
 
-let stage = null;
+let scene =
+  null;
 
-let systemGroup = null;
-let yearGroup = null;
+let camera =
+  null;
 
-let yearFlowMaterial = null;
+let stage =
+  null;
+
+let systemGroup =
+  null;
+
+let yearGroup =
+  null;
+
+let yearFlowMaterial =
+  null;
+
 
 const monthSystems = [];
 
+
 let lightningRecords = [];
+
 let records2025 = [];
 
-let dailyLogCap = 1;
+let dailyLogCap =
+  1;
 
-let monthOrbitOffset = 0;
 
-let manualYaw = 0;
-let manualPitch = 0;
+let monthOrbitOffset =
+  0;
 
-let cameraDistance = 7.4;
 
-let animationFrameId = null;
+let manualYaw =
+  0;
+
+let manualPitch =
+  0;
+
+
+let cameraDistance =
+  7.4;
+
+
+let animationFrameId =
+  null;
 
 
 const pointer = {
@@ -167,11 +212,13 @@ async function loadText(path) {
   const response =
     await fetch(path);
 
+
   if (!response.ok) {
     throw new Error(
       `Could not load ${path}: ${response.status}`
     );
   }
+
 
   return response.text();
 }
@@ -199,16 +246,22 @@ function parseLightningData(text) {
   lightningRecords =
     text
       .trim()
+
       .split(/\r?\n/)
+
       .map(
         line =>
           line.trim()
       )
+
       .filter(Boolean)
 
       /*
-       * HKO file begins with
-       * three heading lines.
+       * HKO CSV:
+       *
+       * line 1 = Chinese title
+       * line 2 = English title
+       * line 3 = headings
        */
       .slice(3)
 
@@ -221,6 +274,7 @@ function parseLightningData(text) {
           completeness
         ] =
           line.split(",");
+
 
         return {
           year:
@@ -241,10 +295,21 @@ function parseLightningData(text) {
       })
 
       .filter(record =>
-        Number.isFinite(record.year) &&
-        Number.isFinite(record.month) &&
-        Number.isFinite(record.day) &&
-        Number.isFinite(record.value)
+        Number.isFinite(
+          record.year
+        ) &&
+
+        Number.isFinite(
+          record.month
+        ) &&
+
+        Number.isFinite(
+          record.day
+        ) &&
+
+        Number.isFinite(
+          record.value
+        )
       );
 
 
@@ -309,8 +374,13 @@ function calculateDailyLogCap(records) {
 
 
   /*
-   * Prevent one extreme day from making
-   * all other days visually invisible.
+   * Use the 98th percentile instead
+   * of absolute maximum.
+   *
+   * This prevents one extreme
+   * lightning day from making
+   * all ordinary active days
+   * visually insignificant.
    */
   const index =
     Math.floor(
@@ -365,12 +435,13 @@ function monthColour(index) {
 
 
   /*
-   * Cyan
+   * Temporal colour progression:
+   *
+   * cyan
    * → blue
    * → violet
    * → magenta
    */
-
   const hue =
     0.50 +
     t *
@@ -399,8 +470,8 @@ function dayColour(
 
 
   /*
-   * Strong lightning becomes
-   * closer to white-hot light.
+   * Strong lightning approaches
+   * white-hot light.
    */
   return base.lerp(
     new THREE.Color(
@@ -420,12 +491,15 @@ function dayColour(
    DATA → RING STYLE
    ========================================================= */
 
-function intensityLevel(intensity) {
+function intensityLevel(
+  intensity
+) {
   if (
     intensity === 0
   ) {
     return 0;
   }
+
 
   if (
     intensity < 0.20
@@ -433,11 +507,13 @@ function intensityLevel(intensity) {
     return 1;
   }
 
+
   if (
     intensity < 0.45
   ) {
     return 2;
   }
+
 
   if (
     intensity < 0.72
@@ -445,34 +521,56 @@ function intensityLevel(intensity) {
     return 3;
   }
 
+
   return 4;
 }
 
 
 /*
- * Lightning count → line thickness.
+ * Prototype 03.1:
  *
- * The rings are concentric and quite close
- * together, so these values stay restrained.
+ * Daily rings become slightly thicker.
+ *
+ * Weak days remain delicate,
+ * while strong lightning becomes
+ * substantially more luminous.
  */
 function dayTubeRadius(level) {
   return [
-    0.00125,
-    0.00175,
-    0.00245,
-    0.00355,
-    0.00520
+    0.00160,
+    0.00220,
+    0.00310,
+    0.00460,
+    0.00680
   ][level];
 }
 
 
 function dayOpacity(level) {
   return [
-    0.075,
-    0.16,
-    0.32,
-    0.61,
-    0.94
+    0.080,
+    0.18,
+    0.36,
+    0.66,
+    0.96
+  ][level];
+}
+
+
+/*
+ * Glow opacity.
+ *
+ * Level 2 now receives a subtle halo,
+ * rather than reserving glow only
+ * for very strong days.
+ */
+function glowOpacity(level) {
+  return [
+    0.000,
+    0.000,
+    0.035,
+    0.085,
+    0.170
   ][level];
 }
 
@@ -484,6 +582,7 @@ function dayOpacity(level) {
 function createStage() {
   document.body.style.margin =
     "0";
+
 
   document.body.style.overflow =
     "hidden";
@@ -544,7 +643,7 @@ function createStage() {
       color:rgba(180,220,255,.55);
       margin-bottom:8px;
     ">
-      THUNDER RHYTHM · PROTOTYPE 03
+      THUNDER RHYTHM · PROTOTYPE 03.1
     </div>
 
     <div style="
@@ -562,7 +661,7 @@ function createStage() {
       line-height:1.6;
       color:rgba(210,220,240,.55);
     ">
-      1 YEAR · 12 MONTH RIPPLE DISCS · 365 DAILY RINGS
+      LARGER MONTH SYSTEMS · ENHANCED LIGHT DIFFUSION
     </div>
   `;
 
@@ -758,10 +857,11 @@ function createThreeScene() {
 
 function createYearOrbit() {
   /*
-   * No visible Year path line.
+   * The Year carrier line itself
+   * remains invisible.
    *
-   * Only moving luminous particles
-   * reveal the large annual orbit.
+   * Only luminous moving particles
+   * reveal its circular path.
    */
 
   const PARTICLE_COUNT =
@@ -1068,7 +1168,8 @@ function createMonthSystems() {
     monthIndex += 1
   ) {
     const monthNumber =
-      monthIndex + 1;
+      monthIndex +
+      1;
 
 
     const calendarDays =
@@ -1091,9 +1192,9 @@ function createMonthSystems() {
 
 
     /*
-     * Slightly different initial orientation
-     * for each Month creates a less mechanical
-     * composition while keeping the hierarchy.
+     * Slightly different initial roll
+     * prevents all Month modules
+     * from feeling mechanically identical.
      */
     monthRoot.rotation.z =
       monthIndex *
@@ -1118,10 +1219,11 @@ function createMonthSystems() {
 
 
         /*
-         * Day 01 = smallest radius.
-         * Last day = largest radius.
+         * Day chronology becomes radius.
+         *
+         * Day 01 = inner ring.
+         * Final date = outer ring.
          */
-
         const radialT =
           (
             record.day -
@@ -1154,10 +1256,8 @@ function createMonthSystems() {
 
 
         /*
-         * Each Day is now one
-         * CONCENTRIC ring.
+         * Core data ring.
          */
-
         const geometry =
           new THREE.TorusGeometry(
             ringRadius,
@@ -1166,8 +1266,8 @@ function createMonthSystems() {
               level
             ),
 
-            6,
-            56
+            7,
+            64
           );
 
 
@@ -1210,15 +1310,26 @@ function createMonthSystems() {
 
 
         /*
-         * Stronger lightning receives
-         * a restrained additional glow.
+         * ===================================================
+         * DIFFUSE GLOW
+         *
+         * Prototype 03 used:
+         * approximately ×2.15 line thickness.
+         *
+         * Prototype 03.1 uses:
+         * ×3.2
+         *
+         * This creates a larger,
+         * softer luminous diffusion area.
+         * ===================================================
          */
 
-        let haloRing = null;
+        let haloRing =
+          null;
 
 
         if (
-          level >= 3
+          level >= 2
         ) {
           const haloGeometry =
             new THREE.TorusGeometry(
@@ -1227,10 +1338,10 @@ function createMonthSystems() {
               dayTubeRadius(
                 level
               ) *
-                2.15,
+                3.2,
 
-              6,
-              56
+              7,
+              64
             );
 
 
@@ -1246,9 +1357,9 @@ function createMonthSystems() {
                   true,
 
                 opacity:
-                  level === 4
-                    ? 0.11
-                    : 0.050,
+                  glowOpacity(
+                    level
+                  ),
 
                 blending:
                   THREE.AdditiveBlending,
@@ -1264,6 +1375,74 @@ function createMonthSystems() {
 
           dayRoot.add(
             haloRing
+          );
+        }
+
+
+        /*
+         * ===================================================
+         * SECONDARY SOFT HALO
+         *
+         * Strong lightning days receive
+         * one larger, very faint layer.
+         *
+         * This increases diffusion range
+         * without simply making the core
+         * line white.
+         * ===================================================
+         */
+
+        let outerHaloRing =
+          null;
+
+
+        if (
+          level >= 3
+        ) {
+          const outerHaloGeometry =
+            new THREE.TorusGeometry(
+              ringRadius,
+
+              dayTubeRadius(
+                level
+              ) *
+                5.5,
+
+              7,
+              64
+            );
+
+
+          outerHaloRing =
+            new THREE.Mesh(
+              outerHaloGeometry,
+
+              new THREE.MeshBasicMaterial({
+                color:
+                  colourDay,
+
+                transparent:
+                  true,
+
+                opacity:
+                  level === 4
+                    ? 0.045
+                    : 0.022,
+
+                blending:
+                  THREE.AdditiveBlending,
+
+                depthWrite:
+                  false,
+
+                depthTest:
+                  true
+              })
+            );
+
+
+          dayRoot.add(
+            outerHaloRing
           );
         }
 
@@ -1295,11 +1474,14 @@ function createMonthSystems() {
 
           haloRing,
 
+          outerHaloRing,
+
           /*
-           * Similar to the Processing
-           * reference:
+           * Day-dependent phase:
            *
-           * i * phase offset
+           * neighbouring rings move
+           * with a slight temporal delay,
+           * producing the ripple.
            */
           phase:
             record.day *
@@ -1310,11 +1492,6 @@ function createMonthSystems() {
       }
     );
 
-
-    /*
-     * Month centres remain evenly spaced
-     * around the Year orbit.
-     */
 
     yearGroup.add(
       monthRoot
@@ -1357,7 +1534,7 @@ function createMonthSystems() {
 
   console.log(
     "2025 concentric hierarchy:",
-    "12 month ripple discs ·",
+    "12 enlarged month ripple discs ·",
 
     monthSystems.reduce(
       (
@@ -1407,13 +1584,12 @@ function updateMonths(time) {
   monthSystems.forEach(
     month => {
       /*
-       * The 12 Month centres continue
-       * to circulate around the Year orbit.
+       * 12 Month centres remain
+       * evenly spaced around Year.
        *
-       * Their order always remains
-       * JAN → DEC.
+       * They circulate together,
+       * preserving JAN → DEC order.
        */
-
       const monthAngle =
         month.baseAngle +
         monthOrbitOffset;
@@ -1443,10 +1619,10 @@ function updateMonths(time) {
 
 
       /*
-       * Orient Month disc perpendicular
-       * to the tangent of Year orbit.
+       * Month ripple plane sits
+       * perpendicular to the tangent
+       * of the Year orbit.
        */
-
       const monthTangent =
         new THREE.Vector3(
           -sinMonth,
@@ -1464,10 +1640,8 @@ function updateMonths(time) {
 
 
       /*
-       * Processing-inspired floating
-       * orientation.
+       * Floating orientation.
        */
-
       const wobbleX =
         new THREE.Quaternion()
           .setFromAxisAngle(
@@ -1501,9 +1675,11 @@ function updateMonths(time) {
         .copy(
           alignment
         )
+
         .multiply(
           wobbleX
         )
+
         .multiply(
           wobbleY
         );
@@ -1513,15 +1689,17 @@ function updateMonths(time) {
        * =====================================================
        * DAILY RIPPLE
        *
-       * Inspired by:
+       * Inspired by Processing:
        *
-       * z = sin(
-       *   frameCount * speed +
-       *   i * phase
-       * ) * amplitude
+       * z =
+       * sin(
+       *   time +
+       *   day phase
+       * )
+       * × amplitude
        *
-       * Every Day ring stays concentric.
-       * Only its local Z position changes.
+       * Each ring remains concentric.
+       * Chronological order never changes.
        * =====================================================
        */
 
@@ -1544,22 +1722,23 @@ function updateMonths(time) {
 
 
           /*
-           * Concentric ring moves
-           * forward / backward in Z.
+           * Inner rings move less.
+           * Outer rings move more.
+           *
+           * This gives the Month module
+           * a bowl / ripple / wave form.
            */
-
           day.root.position.z =
             wave *
             amplitude;
 
 
           /*
-           * Tiny secondary breathing
-           * keeps the form organic,
-           * but date radius remains
-           * effectively unchanged.
+           * Tiny breathing.
+           *
+           * This is visual motion only.
+           * Date radius remains stable.
            */
-
           const breathe =
             1 +
             Math.sin(
@@ -1576,11 +1755,8 @@ function updateMonths(time) {
 
 
           /*
-           * Strong days shimmer a little
-           * more, without changing the
-           * underlying lightning value.
+           * Halo shimmer.
            */
-
           if (
             day.haloRing
           ) {
@@ -1591,13 +1767,39 @@ function updateMonths(time) {
                   0.82 +
                 day.phase
               ) *
-                0.020;
+                0.026;
 
 
             day.haloRing
               .scale
               .setScalar(
                 haloPulse
+              );
+          }
+
+
+          /*
+           * Outer halo moves even more
+           * subtly to produce diffusion.
+           */
+          if (
+            day.outerHaloRing
+          ) {
+            const outerPulse =
+              1 +
+              Math.sin(
+                time *
+                  0.63 +
+                day.phase +
+                0.7
+              ) *
+                0.035;
+
+
+            day.outerHaloRing
+              .scale
+              .setScalar(
+                outerPulse
               );
           }
         }
@@ -1820,10 +2022,10 @@ function animate(timestamp) {
 
 
   /*
-   * Luminous flow around the
-   * invisible Year orbit.
+   * Year light continuously
+   * flows around invisible
+   * annual carrier path.
    */
-
   yearFlowMaterial
     .uniforms
     .uTime
@@ -1832,10 +2034,9 @@ function animate(timestamp) {
 
 
   /*
-   * 12 Month ripple modules
-   * circulate slowly around Year.
+   * Month ripple systems
+   * circulate around Year.
    */
-
   monthOrbitOffset =
     time *
     0.075;
@@ -1847,10 +2048,9 @@ function animate(timestamp) {
 
 
   /*
-   * Entire 2025 hierarchy also
+   * Whole 2025 hierarchy
    * slowly rotates in 3D.
    */
-
   systemGroup.rotation.x =
     0.70 +
     manualPitch +
@@ -1937,7 +2137,7 @@ async function initialisePrototype() {
 
 
   console.log(
-    "Thunder Rhythm 2025 Concentric Month Ripple Test ready."
+    "Thunder Rhythm 2025 Luminous Month Ripple Test ready."
   );
 }
 
@@ -1945,7 +2145,7 @@ async function initialisePrototype() {
 initialisePrototype()
   .catch(error => {
     console.error(
-      "2025 Concentric Month Ripple prototype error:",
+      "2025 Luminous Month Ripple prototype error:",
       error
     );
   });
