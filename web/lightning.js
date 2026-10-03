@@ -1,82 +1,167 @@
-const LIGHTNING_DATA_PATH = "./data/daily_HK_LGTG_ALL.csv";
-const YEAR_START = 2005;
-const YEAR_END = 2026;
-const HK_CENTER = [114.15, 22.34];
+/* =========================================================
+   THUNDER RHYTHM
+   PROTOTYPE 03
+
+   2025 CONCENTRIC MONTH RIPPLE TEST
+
+   Structure:
+
+   2025 YEAR
+        ↓
+   luminous Year orbit
+        ↓
+   12 Month modules
+        ↓
+   each Month =
+   28–31 concentric Daily rings
+
+   Day 01 = innermost ring
+   Last day = outermost ring
+
+   Lightning count controls:
+   - ring brightness
+   - ring thickness
+   - glow
+
+   Motion inspired by:
+   OpenProcessing "Floating"
+
+   Each Daily ring receives a different
+   Z-axis phase, producing a continuous
+   ripple / bowl / breathing-disc effect.
+
+   No Hong Kong map.
+   No other years yet.
+   ========================================================= */
+
+
+const LIGHTNING_DATA_PATH =
+  "./data/daily_HK_LGTG_ALL.csv";
+
+const TARGET_YEAR = 2025;
 
 const MONTH_NAMES = [
-  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+  "JAN",
+  "FEB",
+  "MAR",
+  "APR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AUG",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DEC"
 ];
 
-const PARTIAL_YEARS = {
-  2005: "PARTIAL · STARTS 21 JUN",
-  2026: "PARTIAL / YTD"
-};
+
+/* =========================================================
+   GEOMETRY
+   ========================================================= */
+
+/*
+ * The large 2025 Year orbit.
+ */
+const YEAR_RADIUS = 2.0;
+
+
+/*
+ * Each Month becomes one concentric
+ * ripple disc.
+ */
+const MONTH_INNER_RADIUS = 0.040;
+const MONTH_OUTER_RADIUS = 0.34;
+
+const MONTH_COUNT = 12;
+
+
+/*
+ * Maximum depth of the Month ripple.
+ *
+ * Outer rings move slightly more
+ * than inner rings, creating a more
+ * readable three-dimensional wave.
+ */
+const RIPPLE_INNER_AMPLITUDE = 0.045;
+const RIPPLE_OUTER_AMPLITUDE = 0.105;
+
+
+/* =========================================================
+   THREE / GLOBAL STATE
+   ========================================================= */
 
 let THREE = null;
-
-let lightningRecords = [];
-let nestedYears = [];
-
-let dailyLogCap = 1;
-let monthlyLogCap = 1;
-let annualLogCap = 1;
 
 let renderer = null;
 let scene = null;
 let camera = null;
 
-let temporalSphere = null;
-let atmosphereGroup = null;
+let stage = null;
 
-let raycaster = null;
-let mouse = null;
+let systemGroup = null;
+let yearGroup = null;
 
-let yearSystems = [];
-let pickMeshes = [];
+let yearFlowMaterial = null;
 
-let selectedYear = null;
-let hoveredYear = null;
+const monthSystems = [];
 
-let controlsAttached = false;
+let lightningRecords = [];
+let records2025 = [];
+
+let dailyLogCap = 1;
+
+let monthOrbitOffset = 0;
+
+let manualYaw = 0;
+let manualPitch = 0;
+
+let cameraDistance = 7.4;
+
 let animationFrameId = null;
-
-let lastHeavyFrame = 0;
-let lastInteractionTime = 0;
-
-
-const DEFAULT_ORBIT = {
-  azimuth: 0,
-  polar: 0.08,
-  distance: 8.2
-};
-
-
-const orbit = {
-  ...DEFAULT_ORBIT
-};
 
 
 const pointer = {
   down: false,
-  id: null,
   x: 0,
-  y: 0,
-  moved: false
-};
-
-
-const scratch = {
-  dummy: null,
-  pos: null,
-  quat: null,
-  zAxis: null
+  y: 0
 };
 
 
 /* =========================================================
-   DATA
+   HELPERS
    ========================================================= */
+
+function clamp(
+  value,
+  minimum,
+  maximum
+) {
+  return Math.max(
+    minimum,
+    Math.min(
+      maximum,
+      value
+    )
+  );
+}
+
+
+function lerp(
+  start,
+  end,
+  t
+) {
+  return (
+    start +
+    (
+      end -
+      start
+    ) *
+    t
+  );
+}
+
 
 async function loadText(path) {
   const response =
@@ -92,16 +177,41 @@ async function loadText(path) {
 }
 
 
+function daysInMonth(
+  year,
+  month
+) {
+  return new Date(
+    Date.UTC(
+      year,
+      month,
+      0
+    )
+  ).getUTCDate();
+}
+
+
+/* =========================================================
+   DATA
+   ========================================================= */
+
 function parseLightningData(text) {
   lightningRecords =
     text
       .trim()
       .split(/\r?\n/)
-      .map(line =>
-        line.trim()
+      .map(
+        line =>
+          line.trim()
       )
       .filter(Boolean)
+
+      /*
+       * HKO file begins with
+       * three heading lines.
+       */
       .slice(3)
+
       .map(line => {
         const [
           year,
@@ -129,6 +239,7 @@ function parseLightningData(text) {
             completeness?.trim() || ""
         };
       })
+
       .filter(record =>
         Number.isFinite(record.year) &&
         Number.isFinite(record.month) &&
@@ -137,56 +248,88 @@ function parseLightningData(text) {
       );
 
 
+  records2025 =
+    lightningRecords
+      .filter(
+        record =>
+          record.year ===
+          TARGET_YEAR
+      )
+
+      .sort(
+        (a, b) =>
+          (
+            a.month -
+            b.month
+          ) ||
+          (
+            a.day -
+            b.day
+          )
+      );
+
+
+  dailyLogCap =
+    calculateDailyLogCap(
+      records2025
+    );
+
+
   console.log(
-    "Lightning records loaded:",
-    lightningRecords.length
+    "2025 lightning records loaded:",
+    records2025.length
   );
 }
 
 
-function percentileLogCap(
-  values,
-  percentile = 0.98
-) {
-  const sorted =
-    values
-      .filter(value =>
-        value > 0
+function calculateDailyLogCap(records) {
+  const values =
+    records
+      .filter(
+        record =>
+          record.value > 0
       )
-      .map(value =>
-        Math.log1p(value)
+
+      .map(
+        record =>
+          Math.log1p(
+            record.value
+          )
       )
+
       .sort(
         (a, b) =>
           a - b
       );
 
 
-  if (!sorted.length) {
+  if (!values.length) {
     return 1;
   }
 
 
+  /*
+   * Prevent one extreme day from making
+   * all other days visually invisible.
+   */
   const index =
     Math.floor(
       (
-        sorted.length - 1
+        values.length -
+        1
       ) *
-      percentile
+      0.98
     );
 
 
   return Math.max(
-    sorted[index],
+    values[index],
     1
   );
 }
 
 
-function normaliseLog(
-  value,
-  cap
-) {
+function normaliseLightning(value) {
   if (
     value <= 0
   ) {
@@ -194,274 +337,253 @@ function normaliseLog(
   }
 
 
-  return Math.min(
-    1,
+  return clamp(
     Math.log1p(value) /
-      cap
-  );
-}
+      dailyLogCap,
 
-
-function daysInMonth(
-  year,
-  month
-) {
-  return new Date(
-    Date.UTC(
-      year,
-      month,
-      0
-    )
-  ).getUTCDate();
-}
-
-
-function buildNestedData() {
-  nestedYears = [];
-
-
-  for (
-    let year = YEAR_START;
-    year <= YEAR_END;
-    year += 1
-  ) {
-    const records =
-      lightningRecords.filter(
-        record =>
-          record.year ===
-          year
-      );
-
-
-    const months =
-      MONTH_NAMES.map(
-        (
-          name,
-          monthIndex
-        ) => {
-          const monthRecords =
-            records.filter(
-              record =>
-                record.month ===
-                monthIndex + 1
-            );
-
-
-          return {
-            name,
-
-            month:
-              monthIndex + 1,
-
-            monthIndex,
-
-            records:
-              monthRecords,
-
-            total:
-              monthRecords.reduce(
-                (
-                  sum,
-                  record
-                ) =>
-                  sum +
-                  record.value,
-                0
-              ),
-
-            activeDays:
-              monthRecords.filter(
-                record =>
-                  record.value > 0
-              ).length,
-
-            normalised:
-              0
-          };
-        }
-      );
-
-
-    let peak =
-      null;
-
-
-    records.forEach(
-      record => {
-        if (
-          !peak ||
-          record.value >
-            peak.value
-        ) {
-          peak =
-            record;
-        }
-      }
-    );
-
-
-    nestedYears.push({
-      year,
-
-      records,
-
-      months,
-
-      total:
-        records.reduce(
-          (
-            sum,
-            record
-          ) =>
-            sum +
-            record.value,
-          0
-        ),
-
-      activeDays:
-        records.filter(
-          record =>
-            record.value > 0
-        ).length,
-
-      peakValue:
-        peak?.value ?? 0,
-
-      peakDate:
-        peak
-          ? `${peak.year}-${String(
-              peak.month
-            ).padStart(
-              2,
-              "0"
-            )}-${String(
-              peak.day
-            ).padStart(
-              2,
-              "0"
-            )}`
-          : "—",
-
-      complete:
-        year >= 2006 &&
-        year <= 2025,
-
-      partialLabel:
-        PARTIAL_YEARS[
-          year
-        ] || "",
-
-      normalised:
-        0
-    });
-  }
-
-
-  dailyLogCap =
-    percentileLogCap(
-      lightningRecords.map(
-        record =>
-          record.value
-      ),
-      0.985
-    );
-
-
-  monthlyLogCap =
-    percentileLogCap(
-      nestedYears.flatMap(
-        year =>
-          year.months.map(
-            month =>
-              month.total
-          )
-      ),
-      0.98
-    );
-
-
-  annualLogCap =
-    percentileLogCap(
-      nestedYears.map(
-        year =>
-          year.total
-      ),
-      1
-    );
-
-
-  nestedYears.forEach(
-    year => {
-      year.normalised =
-        normaliseLog(
-          year.total,
-          annualLogCap
-        );
-
-
-      year.months.forEach(
-        month => {
-          month.normalised =
-            normaliseLog(
-              month.total,
-              monthlyLogCap
-            );
-        }
-      );
-    }
-  );
-
-
-  console.log(
-    "Nested temporal data ready:",
-    nestedYears
+    0,
+    1
   );
 }
 
 
 /* =========================================================
-   THREE.JS SETUP
+   COLOUR
    ========================================================= */
 
-function createRenderer() {
-  const container =
-    map.getContainer();
+function monthColour(index) {
+  const colour =
+    new THREE.Color();
 
 
-  document
-    .getElementById(
-      "temporal-sphere-canvas"
-    )
-    ?.remove();
-
-
-  const canvas =
-    document.createElement(
-      "canvas"
+  const t =
+    index /
+    Math.max(
+      1,
+      MONTH_COUNT - 1
     );
 
 
-  canvas.id =
-    "temporal-sphere-canvas";
+  /*
+   * Cyan
+   * → blue
+   * → violet
+   * → magenta
+   */
+
+  const hue =
+    0.50 +
+    t *
+      0.32;
+
+
+  colour.setHSL(
+    hue,
+    0.92,
+    0.64
+  );
+
+
+  return colour;
+}
+
+
+function dayColour(
+  monthIndex,
+  intensity
+) {
+  const base =
+    monthColour(
+      monthIndex
+    );
+
+
+  /*
+   * Strong lightning becomes
+   * closer to white-hot light.
+   */
+  return base.lerp(
+    new THREE.Color(
+      0xffffff
+    ),
+
+    Math.pow(
+      intensity,
+      0.75
+    ) *
+      0.64
+  );
+}
+
+
+/* =========================================================
+   DATA → RING STYLE
+   ========================================================= */
+
+function intensityLevel(intensity) {
+  if (
+    intensity === 0
+  ) {
+    return 0;
+  }
+
+  if (
+    intensity < 0.20
+  ) {
+    return 1;
+  }
+
+  if (
+    intensity < 0.45
+  ) {
+    return 2;
+  }
+
+  if (
+    intensity < 0.72
+  ) {
+    return 3;
+  }
+
+  return 4;
+}
+
+
+/*
+ * Lightning count → line thickness.
+ *
+ * The rings are concentric and quite close
+ * together, so these values stay restrained.
+ */
+function dayTubeRadius(level) {
+  return [
+    0.00125,
+    0.00175,
+    0.00245,
+    0.00355,
+    0.00520
+  ][level];
+}
+
+
+function dayOpacity(level) {
+  return [
+    0.075,
+    0.16,
+    0.32,
+    0.61,
+    0.94
+  ][level];
+}
+
+
+/* =========================================================
+   PAGE
+   ========================================================= */
+
+function createStage() {
+  document.body.style.margin =
+    "0";
+
+  document.body.style.overflow =
+    "hidden";
+
+
+  stage =
+    document.createElement(
+      "div"
+    );
+
+
+  stage.id =
+    "year-2025-ripple-prototype";
 
 
   Object.assign(
-    canvas.style,
+    stage.style,
     {
       position:
-        "absolute",
+        "fixed",
 
       inset:
         "0",
 
-      width:
-        "100%",
+      zIndex:
+        "99999",
 
-      height:
-        "100%",
+      overflow:
+        "hidden",
+
+      background:
+        "#020306",
+
+      cursor:
+        "grab",
+
+      touchAction:
+        "none"
+    }
+  );
+
+
+  document.body.appendChild(
+    stage
+  );
+
+
+  const label =
+    document.createElement(
+      "div"
+    );
+
+
+  label.innerHTML = `
+    <div style="
+      font-size:10px;
+      letter-spacing:.22em;
+      color:rgba(180,220,255,.55);
+      margin-bottom:8px;
+    ">
+      THUNDER RHYTHM · PROTOTYPE 03
+    </div>
+
+    <div style="
+      font-size:26px;
+      font-weight:600;
+      letter-spacing:-.03em;
+      color:#f7f8ff;
+    ">
+      2025 Concentric Month Ripples
+    </div>
+
+    <div style="
+      margin-top:8px;
+      font-size:11px;
+      line-height:1.6;
+      color:rgba(210,220,240,.55);
+    ">
+      1 YEAR · 12 MONTH RIPPLE DISCS · 365 DAILY RINGS
+    </div>
+  `;
+
+
+  Object.assign(
+    label.style,
+    {
+      position:
+        "absolute",
+
+      top:
+        "34px",
+
+      left:
+        "42px",
 
       zIndex:
-        "7",
+        "3",
+
+      fontFamily:
+        "Arial, Helvetica, sans-serif",
 
       pointerEvents:
         "none"
@@ -469,17 +591,84 @@ function createRenderer() {
   );
 
 
-  container.appendChild(
-    canvas
+  stage.appendChild(
+    label
   );
 
 
+  const hint =
+    document.createElement(
+      "div"
+    );
+
+
+  hint.textContent =
+    "DRAG TO ROTATE · SCROLL TO ZOOM";
+
+
+  Object.assign(
+    hint.style,
+    {
+      position:
+        "absolute",
+
+      left:
+        "50%",
+
+      bottom:
+        "28px",
+
+      transform:
+        "translateX(-50%)",
+
+      zIndex:
+        "3",
+
+      padding:
+        "9px 14px",
+
+      border:
+        "1px solid rgba(180,210,255,.14)",
+
+      borderRadius:
+        "999px",
+
+      background:
+        "rgba(3,6,12,.55)",
+
+      color:
+        "rgba(220,230,250,.62)",
+
+      fontFamily:
+        "Arial, Helvetica, sans-serif",
+
+      fontSize:
+        "9px",
+
+      letterSpacing:
+        ".15em",
+
+      pointerEvents:
+        "none"
+    }
+  );
+
+
+  stage.appendChild(
+    hint
+  );
+}
+
+
+/* =========================================================
+   THREE SCENE
+   ========================================================= */
+
+function createThreeScene() {
   renderer =
     new THREE.WebGLRenderer({
-      canvas,
-
       alpha:
-        true,
+        false,
 
       antialias:
         true,
@@ -493,77 +682,721 @@ function createRenderer() {
     Math.min(
       window.devicePixelRatio ||
         1,
+
       1.5
     )
   );
 
 
   renderer.setClearColor(
-    0x000000,
-    0
+    0x020306,
+    1
   );
 
 
-  if (
-    "outputColorSpace"
-      in renderer &&
-    THREE.SRGBColorSpace
-  ) {
-    renderer.outputColorSpace =
-      THREE.SRGBColorSpace;
-  }
-}
+  Object.assign(
+    renderer.domElement.style,
+    {
+      position:
+        "absolute",
+
+      inset:
+        "0",
+
+      width:
+        "100%",
+
+      height:
+        "100%"
+    }
+  );
 
 
-function createScene() {
+  stage.appendChild(
+    renderer.domElement
+  );
+
+
   scene =
     new THREE.Scene();
 
 
   camera =
     new THREE.PerspectiveCamera(
-      40,
+      42,
       1,
       0.1,
       100
     );
 
 
-  raycaster =
-    new THREE.Raycaster();
-
-
-  mouse =
-    new THREE.Vector2();
-
-
-  temporalSphere =
+  systemGroup =
     new THREE.Group();
 
 
-  atmosphereGroup =
+  yearGroup =
     new THREE.Group();
 
 
-  scene.add(
-    temporalSphere,
-    atmosphereGroup
+  systemGroup.add(
+    yearGroup
   );
 
 
-  scratch.dummy =
-    new THREE.Object3D();
+  scene.add(
+    systemGroup
+  );
 
 
-  scratch.pos =
-    new THREE.Vector3();
+  resize();
+}
 
 
-  scratch.quat =
-    new THREE.Quaternion();
+/* =========================================================
+   YEAR ORBIT
+   ========================================================= */
+
+function createYearOrbit() {
+  /*
+   * No visible Year path line.
+   *
+   * Only moving luminous particles
+   * reveal the large annual orbit.
+   */
+
+  const PARTICLE_COUNT =
+    84;
 
 
-  scratch.zAxis =
+  const phases =
+    new Float32Array(
+      PARTICLE_COUNT
+    );
+
+
+  for (
+    let i = 0;
+    i < PARTICLE_COUNT;
+    i += 1
+  ) {
+    const regular =
+      (
+        i /
+        PARTICLE_COUNT
+      ) *
+      Math.PI *
+      2;
+
+
+    const offset =
+      Math.sin(
+        i *
+        12.9898
+      ) *
+      0.055;
+
+
+    phases[i] =
+      regular +
+      offset;
+  }
+
+
+  const flowGeometry =
+    new THREE.BufferGeometry();
+
+
+  flowGeometry.setAttribute(
+    "position",
+
+    new THREE.BufferAttribute(
+      new Float32Array(
+        PARTICLE_COUNT *
+        3
+      ),
+
+      3
+    )
+  );
+
+
+  flowGeometry.setAttribute(
+    "aPhase",
+
+    new THREE.BufferAttribute(
+      phases,
+      1
+    )
+  );
+
+
+  yearFlowMaterial =
+    new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: {
+          value:
+            0
+        },
+
+        uRadius: {
+          value:
+            YEAR_RADIUS
+        }
+      },
+
+
+      vertexShader: `
+        uniform float uTime;
+        uniform float uRadius;
+
+        attribute float aPhase;
+
+        varying float vBrightness;
+
+        void main() {
+
+          float angle =
+            aPhase +
+            uTime * 0.34;
+
+
+          vec3 p =
+            vec3(
+              cos(angle) *
+                uRadius,
+
+              sin(angle) *
+                uRadius,
+
+              0.0
+            );
+
+
+          float pulseA =
+            0.5 +
+            0.5 *
+            sin(
+              angle * 5.0 -
+              uTime * 1.4
+            );
+
+
+          float pulseB =
+            0.5 +
+            0.5 *
+            sin(
+              angle * 11.0 +
+              uTime * 0.8
+            );
+
+
+          vBrightness =
+            0.18 +
+
+            pow(
+              pulseA,
+              7.0
+            ) *
+              0.58 +
+
+            pow(
+              pulseB,
+              10.0
+            ) *
+              0.38;
+
+
+          vec4 mvPosition =
+            modelViewMatrix *
+            vec4(
+              p,
+              1.0
+            );
+
+
+          gl_PointSize =
+            (
+              2.0 +
+              vBrightness *
+                4.2
+            ) *
+            (
+              220.0 /
+              -mvPosition.z
+            );
+
+
+          gl_Position =
+            projectionMatrix *
+            mvPosition;
+        }
+      `,
+
+
+      fragmentShader: `
+        precision highp float;
+
+        varying float vBrightness;
+
+        void main() {
+
+          vec2 p =
+            gl_PointCoord -
+            vec2(0.5);
+
+
+          float d =
+            length(p);
+
+
+          float alpha =
+            1.0 -
+            smoothstep(
+              0.08,
+              0.50,
+              d
+            );
+
+
+          float core =
+            1.0 -
+            smoothstep(
+              0.0,
+              0.15,
+              d
+            );
+
+
+          vec3 cyan =
+            vec3(
+              0.30,
+              0.92,
+              1.00
+            );
+
+
+          vec3 violet =
+            vec3(
+              0.83,
+              0.30,
+              1.00
+            );
+
+
+          vec3 colour =
+            mix(
+              cyan,
+              violet,
+              vBrightness *
+                0.52
+            );
+
+
+          colour =
+            mix(
+              colour,
+              vec3(1.0),
+
+              core *
+              vBrightness *
+                0.50
+            );
+
+
+          alpha *=
+            0.15 +
+            vBrightness *
+              0.68;
+
+
+          if (
+            alpha <
+            0.006
+          ) {
+            discard;
+          }
+
+
+          gl_FragColor =
+            vec4(
+              colour,
+              alpha
+            );
+        }
+      `,
+
+
+      transparent:
+        true,
+
+      depthWrite:
+        false,
+
+      depthTest:
+        true,
+
+      blending:
+        THREE.AdditiveBlending
+    });
+
+
+  const flowPoints =
+    new THREE.Points(
+      flowGeometry,
+      yearFlowMaterial
+    );
+
+
+  flowPoints.frustumCulled =
+    false;
+
+
+  yearGroup.add(
+    flowPoints
+  );
+}
+
+
+/* =========================================================
+   MONTH RIPPLE SYSTEMS
+   ========================================================= */
+
+function createMonthSystems() {
+  for (
+    let monthIndex = 0;
+    monthIndex < MONTH_COUNT;
+    monthIndex += 1
+  ) {
+    const monthNumber =
+      monthIndex + 1;
+
+
+    const calendarDays =
+      daysInMonth(
+        TARGET_YEAR,
+        monthNumber
+      );
+
+
+    const monthRecords =
+      records2025.filter(
+        record =>
+          record.month ===
+          monthNumber
+      );
+
+
+    const monthRoot =
+      new THREE.Group();
+
+
+    /*
+     * Slightly different initial orientation
+     * for each Month creates a less mechanical
+     * composition while keeping the hierarchy.
+     */
+    monthRoot.rotation.z =
+      monthIndex *
+      0.09;
+
+
+    const days = [];
+
+
+    monthRecords.forEach(
+      record => {
+        const intensity =
+          normaliseLightning(
+            record.value
+          );
+
+
+        const level =
+          intensityLevel(
+            intensity
+          );
+
+
+        /*
+         * Day 01 = smallest radius.
+         * Last day = largest radius.
+         */
+
+        const radialT =
+          (
+            record.day -
+            1
+          ) /
+          Math.max(
+            1,
+            calendarDays -
+            1
+          );
+
+
+        const ringRadius =
+          lerp(
+            MONTH_INNER_RADIUS,
+            MONTH_OUTER_RADIUS,
+            radialT
+          );
+
+
+        const colourDay =
+          dayColour(
+            monthIndex,
+            intensity
+          );
+
+
+        const dayRoot =
+          new THREE.Group();
+
+
+        /*
+         * Each Day is now one
+         * CONCENTRIC ring.
+         */
+
+        const geometry =
+          new THREE.TorusGeometry(
+            ringRadius,
+
+            dayTubeRadius(
+              level
+            ),
+
+            6,
+            56
+          );
+
+
+        const material =
+          new THREE.MeshBasicMaterial({
+            color:
+              colourDay,
+
+            transparent:
+              true,
+
+            opacity:
+              dayOpacity(
+                level
+              ),
+
+            blending:
+              level >= 3
+                ? THREE.AdditiveBlending
+                : THREE.NormalBlending,
+
+            depthWrite:
+              false,
+
+            depthTest:
+              true
+          });
+
+
+        const ring =
+          new THREE.Mesh(
+            geometry,
+            material
+          );
+
+
+        dayRoot.add(
+          ring
+        );
+
+
+        /*
+         * Stronger lightning receives
+         * a restrained additional glow.
+         */
+
+        let haloRing = null;
+
+
+        if (
+          level >= 3
+        ) {
+          const haloGeometry =
+            new THREE.TorusGeometry(
+              ringRadius,
+
+              dayTubeRadius(
+                level
+              ) *
+                2.15,
+
+              6,
+              56
+            );
+
+
+          haloRing =
+            new THREE.Mesh(
+              haloGeometry,
+
+              new THREE.MeshBasicMaterial({
+                color:
+                  colourDay,
+
+                transparent:
+                  true,
+
+                opacity:
+                  level === 4
+                    ? 0.11
+                    : 0.050,
+
+                blending:
+                  THREE.AdditiveBlending,
+
+                depthWrite:
+                  false,
+
+                depthTest:
+                  true
+              })
+            );
+
+
+          dayRoot.add(
+            haloRing
+          );
+        }
+
+
+        monthRoot.add(
+          dayRoot
+        );
+
+
+        days.push({
+          day:
+            record.day,
+
+          value:
+            record.value,
+
+          intensity,
+
+          level,
+
+          radialT,
+
+          ringRadius,
+
+          root:
+            dayRoot,
+
+          ring,
+
+          haloRing,
+
+          /*
+           * Similar to the Processing
+           * reference:
+           *
+           * i * phase offset
+           */
+          phase:
+            record.day *
+              0.43 +
+            monthIndex *
+              0.71
+        });
+      }
+    );
+
+
+    /*
+     * Month centres remain evenly spaced
+     * around the Year orbit.
+     */
+
+    yearGroup.add(
+      monthRoot
+    );
+
+
+    monthSystems.push({
+      index:
+        monthIndex,
+
+      month:
+        monthNumber,
+
+      name:
+        MONTH_NAMES[
+          monthIndex
+        ],
+
+      root:
+        monthRoot,
+
+      days,
+
+      calendarDays,
+
+      baseAngle:
+        (
+          monthIndex /
+          MONTH_COUNT
+        ) *
+        Math.PI *
+        2,
+
+      wobblePhase:
+        monthIndex *
+        0.63
+    });
+  }
+
+
+  console.log(
+    "2025 concentric hierarchy:",
+    "12 month ripple discs ·",
+
+    monthSystems.reduce(
+      (
+        total,
+        month
+      ) =>
+        total +
+        month.days.length,
+
+      0
+    ),
+
+    "daily concentric rings"
+  );
+}
+
+
+/* =========================================================
+   MONTH POSITION + RIPPLE MOTION
+   ========================================================= */
+
+function updateMonths(time) {
+  const xAxis =
+    new THREE.Vector3(
+      1,
+      0,
+      0
+    );
+
+
+  const yAxis =
+    new THREE.Vector3(
+      0,
+      1,
+      0
+    );
+
+
+  const zAxis =
     new THREE.Vector3(
       0,
       0,
@@ -571,1432 +1404,218 @@ function createScene() {
     );
 
 
-  updateCamera();
-}
-
-
-/* =========================================================
-   COLOUR + GLOW
-   ========================================================= */
-
-function makeGlowTexture() {
-  const canvas =
-    document.createElement(
-      "canvas"
-    );
-
-
-  canvas.width =
-    256;
-
-  canvas.height =
-    256;
-
-
-  const ctx =
-    canvas.getContext(
-      "2d"
-    );
-
-
-  const gradient =
-    ctx.createRadialGradient(
-      128,
-      128,
-      0,
-
-      128,
-      128,
-      128
-    );
-
-
-  gradient.addColorStop(
-    0,
-    "rgba(255,255,255,1)"
-  );
-
-  gradient.addColorStop(
-    0.10,
-    "rgba(225,250,255,0.95)"
-  );
-
-  gradient.addColorStop(
-    0.28,
-    "rgba(120,225,255,0.50)"
-  );
-
-  gradient.addColorStop(
-    0.52,
-    "rgba(165,115,255,0.20)"
-  );
-
-  gradient.addColorStop(
-    0.78,
-    "rgba(90,55,255,0.06)"
-  );
-
-  gradient.addColorStop(
-    1,
-    "rgba(0,0,0,0)"
-  );
-
-
-  ctx.fillStyle =
-    gradient;
-
-
-  ctx.fillRect(
-    0,
-    0,
-    256,
-    256
-  );
-
-
-  return new THREE.CanvasTexture(
-    canvas
-  );
-}
-
-
-function temporalHue(
-  yearIndex,
-  monthIndex = 0
-) {
-  const yearT =
-    yearIndex /
-    Math.max(
-      1,
-      nestedYears.length - 1
-    );
-
-
-  const monthT =
-    monthIndex /
-    11;
-
-
-  return (
-    190 +
-    120 *
-      (
-        yearT * 0.78 +
-        monthT * 0.22
-      )
-  );
-}
-
-
-function makeTemporalColor(
-  yearIndex,
-  monthIndex,
-  intensity,
-  floor = 0.03
-) {
-  const color =
-    new THREE.Color();
-
-
-  const shaped =
-    Math.pow(
-      intensity,
-      0.70
-    );
-
-
-  color.setHSL(
-    temporalHue(
-      yearIndex,
-      monthIndex
-    ) /
-      360,
-
-    0.88,
-
-    floor +
-      shaped *
-        (
-          0.86 -
-          floor
-        )
-  );
-
-
-  return color;
-}
-
-
-/* =========================================================
-   ATMOSPHERE
-   ========================================================= */
-
-function buildAtmosphere() {
-  atmosphereGroup.clear();
-
-
-  const texture =
-    makeGlowTexture();
-
-
-  const glowA =
-    new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map:
-          texture,
-
-        color:
-          0x9fe7ff,
-
-        transparent:
-          true,
-
-        opacity:
-          0.16,
-
-        blending:
-          THREE.AdditiveBlending,
-
-        depthWrite:
-          false
-      })
-    );
-
-
-  glowA.scale.set(
-    7.3,
-    7.3,
-    1
-  );
-
-
-  atmosphereGroup.add(
-    glowA
-  );
-
-
-  const glowB =
-    new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map:
-          texture,
-
-        color:
-          0xe2b7ff,
-
-        transparent:
-          true,
-
-        opacity:
-          0.08,
-
-        blending:
-          THREE.AdditiveBlending,
-
-        depthWrite:
-          false
-      })
-    );
-
-
-  glowB.scale.set(
-    5.0,
-    5.0,
-    1
-  );
-
-
-  atmosphereGroup.add(
-    glowB
-  );
-
-
-  const count =
-    900;
-
-
-  const positions =
-    new Float32Array(
-      count * 3
-    );
-
-
-  let seed =
-    91277;
-
-
-  const random =
-    () => {
-      seed =
-        (
-          seed *
-            1664525 +
-          1013904223
-        ) %
-        4294967296;
-
-
-      return (
-        seed /
-        4294967296
-      );
-    };
-
-
-  for (
-    let i = 0;
-    i < count;
-    i += 1
-  ) {
-    const theta =
-      random() *
-      Math.PI *
-      2;
-
-
-    const phi =
-      Math.acos(
-        random() *
-          2 -
-        1
-      );
-
-
-    const radius =
-      1.7 +
-      random() *
-        1.1;
-
-
-    positions[
-      i * 3
-    ] =
-      radius *
-      Math.sin(phi) *
-      Math.cos(theta);
-
-
-    positions[
-      i * 3 + 1
-    ] =
-      radius *
-      Math.cos(phi);
-
-
-    positions[
-      i * 3 + 2
-    ] =
-      radius *
-      Math.sin(phi) *
-      Math.sin(theta);
-  }
-
-
-  const geometry =
-    new THREE.BufferGeometry();
-
-
-  geometry.setAttribute(
-    "position",
-
-    new THREE.BufferAttribute(
-      positions,
-      3
-    )
-  );
-
-
-  const particles =
-    new THREE.Points(
-      geometry,
-
-      new THREE.PointsMaterial({
-        color:
-          0xd1ecff,
-
-        size:
-          0.014,
-
-        transparent:
-          true,
-
-        opacity:
-          0.18,
-
-        blending:
-          THREE.AdditiveBlending,
-
-        depthWrite:
-          false
-      })
-    );
-
-
-  atmosphereGroup.add(
-    particles
-  );
-}
-
-
-/* =========================================================
-   GEOMETRY HELPERS
-   ========================================================= */
-
-function createCircleLine(
-  radius,
-  color,
-  opacity,
-  segments = 128
-) {
-  const points =
-    [];
-
-
-  for (
-    let i = 0;
-    i <= segments;
-    i += 1
-  ) {
-    const angle =
-      (
-        i /
-        segments
-      ) *
-      Math.PI *
-      2;
-
-
-    points.push(
-      new THREE.Vector3(
-        Math.cos(angle) *
-          radius,
-
-        0,
-
-        Math.sin(angle) *
-          radius
-      )
-    );
-  }
-
-
-  return new THREE.LineLoop(
-    new THREE.BufferGeometry()
-      .setFromPoints(
-        points
-      ),
-
-    new THREE.LineBasicMaterial({
-      color,
-
-      transparent:
-        true,
-
-      opacity,
-
-      blending:
-        THREE.AdditiveBlending,
-
-      depthWrite:
-        false
-    })
-  );
-}
-
-
-function monthFrame(
-  monthAngle,
-  yearRadius
-) {
-  const cosA =
-    Math.cos(
-      monthAngle
-    );
-
-
-  const sinA =
-    Math.sin(
-      monthAngle
-    );
-
-
-  return {
-    center:
-      new THREE.Vector3(
-        cosA *
-          yearRadius,
-
-        0,
-
-        sinA *
-          yearRadius
-      ),
-
-    normal:
-      new THREE.Vector3(
-        cosA,
-        0,
-        sinA
-      ).normalize(),
-
-    e1:
-      new THREE.Vector3(
-        0,
-        1,
-        0
-      ),
-
-    e2:
-      new THREE.Vector3(
-        -sinA,
-        0,
-        cosA
-      ).normalize()
-  };
-}
-
-
-function buildMonthLines(
-  yearObj
-) {
-  const positions =
-    [];
-
-
-  const colors =
-    [];
-
-
-  const segments =
-    36;
-
-
-  yearObj.months.forEach(
+  monthSystems.forEach(
     month => {
-      const angle =
-        (
-          month.monthIndex /
-          12
-        ) *
-        Math.PI *
-        2;
+      /*
+       * The 12 Month centres continue
+       * to circulate around the Year orbit.
+       *
+       * Their order always remains
+       * JAN → DEC.
+       */
+
+      const monthAngle =
+        month.baseAngle +
+        monthOrbitOffset;
 
 
-      const frame =
-        monthFrame(
-          angle,
-          yearObj.radius
+      const cosMonth =
+        Math.cos(
+          monthAngle
         );
 
 
-      const color =
-        makeTemporalColor(
-          yearObj.yearIndex,
-          month.monthIndex,
-          month.normalised,
-          month.records.length
-            ? 0.045
-            : 0.012
+      const sinMonth =
+        Math.sin(
+          monthAngle
         );
 
 
-      for (
-        let i = 0;
-        i < segments;
-        i += 1
-      ) {
-        const a0 =
-          (
-            i /
-            segments
-          ) *
-          Math.PI *
-          2;
+      month.root.position.set(
+        cosMonth *
+          YEAR_RADIUS,
+
+        sinMonth *
+          YEAR_RADIUS,
+
+        0
+      );
 
 
-        const a1 =
-          (
-            (
-              i + 1
-            ) /
-            segments
-          ) *
-          Math.PI *
-          2;
+      /*
+       * Orient Month disc perpendicular
+       * to the tangent of Year orbit.
+       */
+
+      const monthTangent =
+        new THREE.Vector3(
+          -sinMonth,
+          cosMonth,
+          0
+        ).normalize();
 
 
-        const p0 =
-          frame.center
-            .clone()
-            .add(
-              frame.e1
-                .clone()
-                .multiplyScalar(
-                  Math.cos(a0) *
-                    yearObj.monthRadius
-                )
-            )
-            .add(
-              frame.e2
-                .clone()
-                .multiplyScalar(
-                  Math.sin(a0) *
-                    yearObj.monthRadius
-                )
-            );
+      const alignment =
+        new THREE.Quaternion()
+          .setFromUnitVectors(
+            zAxis,
+            monthTangent
+          );
 
 
-        const p1 =
-          frame.center
-            .clone()
-            .add(
-              frame.e1
-                .clone()
-                .multiplyScalar(
-                  Math.cos(a1) *
-                    yearObj.monthRadius
-                )
-            )
-            .add(
-              frame.e2
-                .clone()
-                .multiplyScalar(
-                  Math.sin(a1) *
-                    yearObj.monthRadius
-                )
-            );
+      /*
+       * Processing-inspired floating
+       * orientation.
+       */
+
+      const wobbleX =
+        new THREE.Quaternion()
+          .setFromAxisAngle(
+            xAxis,
+
+            Math.sin(
+              time *
+                0.36 +
+              month.wobblePhase
+            ) *
+              0.13
+          );
 
 
-        positions.push(
-          p0.x,
-          p0.y,
-          p0.z,
+      const wobbleY =
+        new THREE.Quaternion()
+          .setFromAxisAngle(
+            yAxis,
 
-          p1.x,
-          p1.y,
-          p1.z
-        );
-
-
-        colors.push(
-          color.r,
-          color.g,
-          color.b,
-
-          color.r,
-          color.g,
-          color.b
-        );
-      }
-    }
-  );
+            Math.cos(
+              time *
+                0.29 +
+              month.wobblePhase *
+                1.3
+            ) *
+              0.085
+          );
 
 
-  const geometry =
-    new THREE.BufferGeometry();
-
-
-  geometry.setAttribute(
-    "position",
-
-    new THREE.Float32BufferAttribute(
-      positions,
-      3
-    )
-  );
-
-
-  geometry.setAttribute(
-    "color",
-
-    new THREE.Float32BufferAttribute(
-      colors,
-      3
-    )
-  );
-
-
-  return new THREE.LineSegments(
-    geometry,
-
-    new THREE.LineBasicMaterial({
-      vertexColors:
-        true,
-
-      transparent:
-        true,
-
-      opacity:
-        0.24,
-
-      blending:
-        THREE.AdditiveBlending,
-
-      depthWrite:
-        false
-    })
-  );
-}
-
-
-/* =========================================================
-   BUILD NESTED TEMPORAL SPHERE
-   ========================================================= */
-
-function clearTemporalSphere() {
-  if (
-    !temporalSphere
-  ) {
-    return;
-  }
-
-
-  temporalSphere.traverse(
-    object => {
-      object.geometry
-        ?.dispose?.();
-
-
-      if (
-        Array.isArray(
-          object.material
+      month.root.quaternion
+        .copy(
+          alignment
         )
-      ) {
-        object.material.forEach(
-          material =>
-            material.dispose?.()
-        );
-      }
-
-      else {
-        object.material
-          ?.dispose?.();
-      }
-    }
-  );
-
-
-  temporalSphere.clear();
-
-
-  yearSystems =
-    [];
-
-
-  pickMeshes =
-    [];
-}
-
-
-function buildNestedTemporalSphere() {
-  clearTemporalSphere();
-
-  buildAtmosphere();
-
-
-  const coreGeometry =
-    new THREE.TorusGeometry(
-      0.038,
-      0.010,
-      4,
-      12
-    );
-
-
-  const haloGeometry =
-    new THREE.TorusGeometry(
-      0.050,
-      0.022,
-      4,
-      12
-    );
-
-
-  nestedYears.forEach(
-    (
-      yearData,
-      yearIndex
-    ) => {
-      const yearGroup =
-        new THREE.Group();
-
-
-      const timeT =
-        yearIndex /
-        Math.max(
-          1,
-          nestedYears.length - 1
+        .multiply(
+          wobbleX
+        )
+        .multiply(
+          wobbleY
         );
 
 
       /*
-       * Later years sit slightly
-       * farther outward.
-       * This represents time,
-       * not lightning magnitude.
+       * =====================================================
+       * DAILY RIPPLE
+       *
+       * Inspired by:
+       *
+       * z = sin(
+       *   frameCount * speed +
+       *   i * phase
+       * ) * amplitude
+       *
+       * Every Day ring stays concentric.
+       * Only its local Z position changes.
+       * =====================================================
        */
 
-      const radius =
-        1.72 +
-        timeT *
-          0.54;
-
-
-      const monthRadius =
-        0.29 +
-        0.025 *
-          Math.sin(
-            yearIndex *
-              0.71
-          );
-
-
-      /*
-       * Each year has a different
-       * orientation, so all systems
-       * interweave into a sphere.
-       */
-
-      const baseRotation = {
-        x:
-          0.36 *
-            Math.sin(
-              yearIndex *
-                1.21
-            ) +
-          0.10,
-
-        y:
-          yearIndex *
-          0.17,
-
-        z:
-          0.42 *
-          Math.cos(
-            yearIndex *
-              0.93
-          )
-      };
-
-
-      yearGroup.rotation.set(
-        baseRotation.x,
-        baseRotation.y,
-        baseRotation.z
-      );
-
-
-      const yearColor =
-        makeTemporalColor(
-          yearIndex,
-          5,
-          yearData.normalised,
-          0.08
-        );
-
-
-      const orbitLine =
-        createCircleLine(
-          radius,
-
-          yearColor,
-
-          yearData.complete
-            ? (
-                0.12 +
-                yearData.normalised *
-                  0.20
-              )
-            : 0.045,
-
-          144
-        );
-
-
-      yearGroup.add(
-        orbitLine
-      );
-
-
-      const yearObj = {
-        group:
-          yearGroup,
-
-        stats:
-          yearData,
-
-        yearIndex,
-
-        radius,
-
-        monthRadius,
-
-        months:
-          yearData.months,
-
-        baseRotation,
-
-        spinSpeed:
-          0.018 +
-          (
-            yearIndex %
-            7
-          ) *
-            0.0015,
-
-        phase:
-          yearIndex *
-          0.71,
-
-        dayInstances:
-          [],
-
-        orbitLine,
-
-        monthLines:
-          null,
-
-        coreMesh:
-          null,
-
-        haloMesh:
-          null,
-
-        coreBaseOpacity:
-          yearData.complete
-            ? 0.90
-            : 0.40,
-
-        haloBaseOpacity:
-          yearData.complete
-            ? 0.18
-            : 0.07
-      };
-
-
-      yearObj.monthLines =
-        buildMonthLines(
-          yearObj
-        );
-
-
-      yearGroup.add(
-        yearObj.monthLines
-      );
-
-
-      let instanceIndex =
-        0;
-
-
-      yearData.months.forEach(
-        month => {
-          const monthAngle =
-            (
-              month.monthIndex /
-              12
-            ) *
-            Math.PI *
-            2;
-
-
-          const frame =
-            monthFrame(
-              monthAngle,
-              radius
-            );
-
-
-          const calendarDays =
-            daysInMonth(
-              yearData.year,
-              month.month
-            );
-
-
-          month.records.forEach(
-            record => {
-              const intensity =
-                normaliseLog(
-                  record.value,
-                  dailyLogCap
-                );
-
-
-              yearObj.dayInstances.push({
-                index:
-                  instanceIndex,
-
-                frame,
-
-                monthIndex:
-                  month.monthIndex,
-
-                baseAngle:
-                  (
-                    (
-                      record.day -
-                      1
-                    ) /
-                    calendarDays
-                  ) *
-                  Math.PI *
-                  2,
-
-                value:
-                  record.value,
-
-                intensity,
-
-                phase:
-                  yearIndex *
-                    0.87 +
-                  month.monthIndex *
-                    0.61 +
-                  record.day *
-                    0.19,
-
-                spinSpeed:
-                  0.055 +
-                  month.monthIndex *
-                    0.0025 +
-                  (
-                    yearIndex %
-                    4
-                  ) *
-                    0.0015
-              });
-
-
-              instanceIndex +=
-                1;
-            }
-          );
-        }
-      );
-
-
-      const coreMesh =
-        new THREE.InstancedMesh(
-          coreGeometry,
-
-          new THREE.MeshBasicMaterial({
-            color:
-              0xffffff,
-
-            transparent:
-              true,
-
-            opacity:
-              yearObj.coreBaseOpacity,
-
-            blending:
-              THREE.AdditiveBlending,
-
-            depthWrite:
-              false,
-
-            vertexColors:
-              true
-          }),
-
-          yearObj
-            .dayInstances
-            .length
-        );
-
-
-      const haloMesh =
-        new THREE.InstancedMesh(
-          haloGeometry,
-
-          new THREE.MeshBasicMaterial({
-            color:
-              0xffffff,
-
-            transparent:
-              true,
-
-            opacity:
-              yearObj.haloBaseOpacity,
-
-            blending:
-              THREE.AdditiveBlending,
-
-            depthWrite:
-              false,
-
-            vertexColors:
-              true
-          }),
-
-          yearObj
-            .dayInstances
-            .length
-        );
-
-
-      coreMesh
-        .instanceMatrix
-        .setUsage(
-          THREE.DynamicDrawUsage
-        );
-
-
-      haloMesh
-        .instanceMatrix
-        .setUsage(
-          THREE.DynamicDrawUsage
-        );
-
-
-      yearObj.dayInstances.forEach(
+      month.days.forEach(
         day => {
-          const color =
-            makeTemporalColor(
-              yearIndex,
-
-              day.monthIndex,
-
-              day.intensity,
-
-              day.value > 0
-                ? 0.045
-                : 0.008
+          const amplitude =
+            lerp(
+              RIPPLE_INNER_AMPLITUDE,
+              RIPPLE_OUTER_AMPLITUDE,
+              day.radialT
             );
 
 
-          coreMesh.setColorAt(
-            day.index,
-            color
-          );
-
-
-          haloMesh.setColorAt(
-            day.index,
-            color
-          );
-        }
-      );
-
-
-      if (
-        coreMesh.instanceColor
-      ) {
-        coreMesh.instanceColor
-          .needsUpdate =
-            true;
-      }
-
-
-      if (
-        haloMesh.instanceColor
-      ) {
-        haloMesh.instanceColor
-          .needsUpdate =
-            true;
-      }
-
-
-      yearObj.coreMesh =
-        coreMesh;
-
-
-      yearObj.haloMesh =
-        haloMesh;
-
-
-      yearGroup.add(
-        haloMesh,
-        coreMesh
-      );
-
-
-      /*
-       * Invisible selection ring.
-       */
-
-      const pickMesh =
-        new THREE.Mesh(
-          new THREE.TorusGeometry(
-            radius,
-            0.16,
-            5,
-            96
-          ),
-
-          new THREE.MeshBasicMaterial({
-            transparent:
-              true,
-
-            opacity:
-              0,
-
-            depthWrite:
-              false
-          })
-        );
-
-
-      pickMesh.rotation.x =
-        Math.PI /
-        2;
-
-
-      pickMesh.userData.stats =
-        yearData;
-
-
-      pickMeshes.push(
-        pickMesh
-      );
-
-
-      yearGroup.add(
-        pickMesh
-      );
-
-
-      yearSystems.push(
-        yearObj
-      );
-
-
-      temporalSphere.add(
-        yearGroup
-      );
-    }
-  );
-
-
-  updateDayInstances(
-    0
-  );
-
-
-  updateYearAppearance();
-}
-
-
-/* =========================================================
-   DAILY LIGHT CELL MOTION
-   ========================================================= */
-
-function updateDayInstances(
-  timeSeconds
-) {
-  yearSystems.forEach(
-    yearObj => {
-      yearObj.dayInstances.forEach(
-        day => {
-          const angle =
-            day.baseAngle +
-            timeSeconds *
-              day.spinSpeed +
+          const wave =
             Math.sin(
-              timeSeconds *
-                0.42 +
+              time *
+                1.55 +
               day.phase
-            ) *
-              0.08;
-
-
-          scratch.pos.copy(
-            day.frame.center
-          );
-
-
-          scratch.pos
-            .addScaledVector(
-              day.frame.e1,
-
-              Math.cos(angle) *
-                yearObj.monthRadius
-            );
-
-
-          scratch.pos
-            .addScaledVector(
-              day.frame.e2,
-
-              Math.sin(angle) *
-                yearObj.monthRadius
             );
 
 
           /*
-           * Small depth motion makes
-           * each monthly orbit feel alive.
+           * Concentric ring moves
+           * forward / backward in Z.
            */
 
-          scratch.pos
-            .addScaledVector(
-              day.frame.normal,
-
-              (
-                0.02 +
-                day.intensity *
-                  0.08
-              ) *
-              Math.sin(
-                timeSeconds *
-                  0.31 +
-                day.phase
-              )
-            );
+          day.root.position.z =
+            wave *
+            amplitude;
 
 
-          scratch.quat
-            .setFromUnitVectors(
-              scratch.zAxis,
-              day.frame.normal
-            );
+          /*
+           * Tiny secondary breathing
+           * keeps the form organic,
+           * but date radius remains
+           * effectively unchanged.
+           */
 
-
-          const shaped =
-            Math.pow(
-              day.intensity,
-              0.68
-            );
-
-
-          const breathing =
+          const breathe =
             1 +
             Math.sin(
-              timeSeconds *
-                1.15 +
+              time *
+                0.47 +
               day.phase
             ) *
-              0.035;
+              0.006;
+
+
+          day.root.scale.setScalar(
+            breathe
+          );
 
 
           /*
-           * Zero-lightning days stay
-           * almost invisible.
+           * Strong days shimmer a little
+           * more, without changing the
+           * underlying lightning value.
            */
 
-          const coreScale =
-            day.value <= 0
-              ? 0.12
-              : (
-                  0.55 +
-                  shaped *
-                    2.30
-                ) *
-                breathing;
+          if (
+            day.haloRing
+          ) {
+            const haloPulse =
+              1 +
+              Math.sin(
+                time *
+                  0.82 +
+                day.phase
+              ) *
+                0.020;
 
 
-          scratch.dummy
-            .position
-            .copy(
-              scratch.pos
-            );
-
-
-          scratch.dummy
-            .quaternion
-            .copy(
-              scratch.quat
-            );
-
-
-          scratch.dummy
-            .scale
-            .setScalar(
-              coreScale
-            );
-
-
-          scratch.dummy
-            .updateMatrix();
-
-
-          yearObj.coreMesh
-            .setMatrixAt(
-              day.index,
-              scratch.dummy.matrix
-            );
-
-
-          const haloScale =
-            day.value <= 0
-              ? 0.01
-              : coreScale *
-                (
-                  1.35 +
-                  shaped *
-                    1.70
-                );
-
-
-          scratch.dummy
-            .scale
-            .setScalar(
-              haloScale
-            );
-
-
-          scratch.dummy
-            .updateMatrix();
-
-
-          yearObj.haloMesh
-            .setMatrixAt(
-              day.index,
-              scratch.dummy.matrix
-            );
+            day.haloRing
+              .scale
+              .setScalar(
+                haloPulse
+              );
+          }
         }
       );
-
-
-      yearObj
-        .coreMesh
-        .instanceMatrix
-        .needsUpdate =
-          true;
-
-
-      yearObj
-        .haloMesh
-        .instanceMatrix
-        .needsUpdate =
-          true;
     }
   );
 }
 
 
 /* =========================================================
-   CAMERA + MAP
+   CAMERA + INTERACTION
    ========================================================= */
 
 function updateCamera() {
-  if (
-    !camera
-  ) {
-    return;
-  }
-
-
-  const {
-    azimuth,
-    polar,
-    distance
-  } =
-    orbit;
-
-
   camera.position.set(
-    distance *
-      Math.sin(polar) *
-      Math.sin(azimuth),
-
-    distance *
-      Math.cos(polar),
-
-    distance *
-      Math.sin(polar) *
-      Math.cos(azimuth)
+    0,
+    0,
+    cameraDistance
   );
 
 
@@ -2008,50 +1627,147 @@ function updateCamera() {
 }
 
 
-function syncMapToOrbit() {
-  if (
-    !map ||
-    !map.loaded()
-  ) {
-    return;
-  }
+function attachInteraction() {
+  stage.addEventListener(
+    "pointerdown",
+
+    event => {
+      pointer.down =
+        true;
 
 
-  const progress =
-    Math.min(
-      1,
-
-      Math.max(
-        0,
-
-        (
-          orbit.polar -
-          0.08
-        ) /
-        (
-          1.30 -
-          0.08
-        )
-      )
-    );
+      pointer.x =
+        event.clientX;
 
 
-  map.jumpTo({
-    pitch:
-      progress *
-      62,
+      pointer.y =
+        event.clientY;
 
-    bearing:
-      -(
-        orbit.azimuth *
-        180 /
-        Math.PI
-      )
-  });
+
+      stage.style.cursor =
+        "grabbing";
+
+
+      stage.setPointerCapture?.(
+        event.pointerId
+      );
+    }
+  );
+
+
+  stage.addEventListener(
+    "pointermove",
+
+    event => {
+      if (
+        !pointer.down
+      ) {
+        return;
+      }
+
+
+      const dx =
+        event.clientX -
+        pointer.x;
+
+
+      const dy =
+        event.clientY -
+        pointer.y;
+
+
+      manualYaw +=
+        dx *
+        0.005;
+
+
+      manualPitch +=
+        dy *
+        0.004;
+
+
+      manualPitch =
+        clamp(
+          manualPitch,
+          -1.0,
+          1.0
+        );
+
+
+      pointer.x =
+        event.clientX;
+
+
+      pointer.y =
+        event.clientY;
+    }
+  );
+
+
+  stage.addEventListener(
+    "pointerup",
+
+    () => {
+      pointer.down =
+        false;
+
+
+      stage.style.cursor =
+        "grab";
+    }
+  );
+
+
+  stage.addEventListener(
+    "pointercancel",
+
+    () => {
+      pointer.down =
+        false;
+
+
+      stage.style.cursor =
+        "grab";
+    }
+  );
+
+
+  stage.addEventListener(
+    "wheel",
+
+    event => {
+      event.preventDefault();
+
+
+      cameraDistance +=
+        event.deltaY *
+        0.003;
+
+
+      cameraDistance =
+        clamp(
+          cameraDistance,
+          4.8,
+          11
+        );
+
+
+      updateCamera();
+    },
+
+    {
+      passive:
+        false
+    }
+  );
 }
 
 
-function resizeRenderer() {
+/* =========================================================
+   RESIZE
+   ========================================================= */
+
+function resize() {
   if (
     !renderer ||
     !camera
@@ -2060,22 +1776,12 @@ function resizeRenderer() {
   }
 
 
-  const container =
-    map.getContainer();
-
-
   const width =
-    Math.max(
-      1,
-      container.clientWidth
-    );
+    window.innerWidth;
 
 
   const height =
-    Math.max(
-      1,
-      container.clientHeight
-    );
+    window.innerHeight;
 
 
   renderer.setSize(
@@ -2091,884 +1797,21 @@ function resizeRenderer() {
 
 
   camera.updateProjectionMatrix();
+
+
+  updateCamera();
 }
 
 
 /* =========================================================
-   INTERFACE
+   ANIMATION
    ========================================================= */
 
-function ensureInterface() {
-  const container =
-    map.getContainer();
-
-
-  document
-    .getElementById(
-      "temporal-sphere-info"
-    )
-    ?.remove();
-
-
-  document
-    .getElementById(
-      "temporal-sphere-hint"
-    )
-    ?.remove();
-
-
-  if (
-    !document.getElementById(
-      "temporal-sphere-style"
-    )
-  ) {
-    const style =
-      document.createElement(
-        "style"
-      );
-
-
-    style.id =
-      "temporal-sphere-style";
-
-
-    style.textContent = `
-      #temporal-sphere-info {
-        position:absolute;
-        top:32px;
-        right:72px;
-        width:245px;
-        z-index:12;
-        pointer-events:none;
-        color:#f4f5ff;
-        font-family:Arial,Helvetica,sans-serif;
-      }
-
-      #temporal-sphere-info .eyebrow {
-        margin-bottom:10px;
-        font-size:10px;
-        letter-spacing:.22em;
-        color:rgba(200,220,255,.58);
-      }
-
-      #temporal-sphere-info .year {
-        font-size:34px;
-        line-height:1;
-        font-weight:650;
-        letter-spacing:-.03em;
-      }
-
-      #temporal-sphere-info .count {
-        margin-top:9px;
-        font-size:13px;
-        line-height:1.5;
-        color:rgba(225,231,255,.88);
-      }
-
-      #temporal-sphere-info .meta {
-        margin-top:12px;
-        font-size:10px;
-        line-height:1.65;
-        letter-spacing:.08em;
-        color:rgba(190,201,231,.60);
-      }
-
-      #temporal-sphere-hint {
-        position:absolute;
-        left:50%;
-        bottom:30px;
-        transform:translateX(-50%);
-        z-index:12;
-        pointer-events:none;
-
-        padding:9px 13px;
-
-        border:
-          1px solid
-          rgba(
-            190,
-            210,
-            255,
-            .17
-          );
-
-        border-radius:
-          999px;
-
-        background:
-          rgba(
-            3,
-            5,
-            11,
-            .55
-          );
-
-        backdrop-filter:
-          blur(8px);
-
-        color:
-          rgba(
-            223,
-            231,
-            255,
-            .72
-          );
-
-        font-family:
-          Arial,
-          Helvetica,
-          sans-serif;
-
-        font-size:
-          9px;
-
-        letter-spacing:
-          .16em;
-
-        white-space:
-          nowrap;
-      }
-    `;
-
-
-    document.head.appendChild(
-      style
-    );
-  }
-
-
-  const info =
-    document.createElement(
-      "div"
-    );
-
-
-  info.id =
-    "temporal-sphere-info";
-
-
-  info.innerHTML = `
-    <div class="eyebrow">
-      NESTED TEMPORAL LIGHT FIELD
-    </div>
-
-    <div
-      class="year"
-      id="sphere-year"
-    >
-      2005–2026
-    </div>
-
-    <div
-      class="count"
-      id="sphere-count"
-    >
-      22 years · ${lightningRecords.length.toLocaleString()} daily records
-    </div>
-
-    <div
-      class="meta"
-      id="sphere-meta"
-    >
-      YEAR → 12 MONTH ORBITS<br>
-      MONTH → DAILY LIGHT CELLS<br>
-      DRAG TO ROTATE · SCROLL TO ZOOM
-    </div>
-  `;
-
-
-  container.appendChild(
-    info
-  );
-
-
-  const hint =
-    document.createElement(
-      "div"
-    );
-
-
-  hint.id =
-    "temporal-sphere-hint";
-
-
-  hint.textContent =
-    "DRAG TO ORBIT THE LIVING DATA SPHERE";
-
-
-  container.appendChild(
-    hint
-  );
-
-
-  updateInfoPanel();
-}
-
-
-function updateInfoPanel() {
-  const yearEl =
-    document.getElementById(
-      "sphere-year"
-    );
-
-
-  const countEl =
-    document.getElementById(
-      "sphere-count"
-    );
-
-
-  const metaEl =
-    document.getElementById(
-      "sphere-meta"
-    );
-
-
-  if (
-    !yearEl ||
-    !countEl ||
-    !metaEl
-  ) {
-    return;
-  }
-
-
-  const activeYear =
-    selectedYear ??
-    hoveredYear;
-
-
-  if (
-    activeYear === null
-  ) {
-    yearEl.textContent =
-      "2005–2026";
-
-
-    countEl.textContent =
-      `22 years · ${lightningRecords.length.toLocaleString()} daily records`;
-
-
-    metaEl.innerHTML =
-      "YEAR → 12 MONTH ORBITS<br>" +
-      "MONTH → DAILY LIGHT CELLS<br>" +
-      "DRAG TO ROTATE · SCROLL TO ZOOM";
-
-
-    return;
-  }
-
-
-  const stats =
-    nestedYears.find(
-      item =>
-        item.year ===
-        activeYear
-    );
-
-
-  if (
-    !stats
-  ) {
-    return;
-  }
-
-
-  yearEl.textContent =
-    String(
-      stats.year
-    );
-
-
-  countEl.innerHTML =
-    `<strong>${stats.total.toLocaleString()}</strong> lightning strikes`;
-
-
-  metaEl.innerHTML =
-    `${stats.activeDays.toLocaleString()} ACTIVE DAYS<br>` +
-    `PEAK ${stats.peakValue.toLocaleString()} · ${stats.peakDate}<br>` +
-    (
-      stats.complete
-        ? "COMPLETE YEAR"
-        : stats.partialLabel
-    );
-}
-
-
-/* =========================================================
-   YEAR HIGHLIGHT
-   ========================================================= */
-
-function updateYearAppearance() {
-  yearSystems.forEach(
-    yearObj => {
-      const selected =
-        selectedYear ===
-        yearObj.stats.year;
-
-
-      const hovered =
-        hoveredYear ===
-        yearObj.stats.year;
-
-
-      if (
-        selectedYear !==
-        null
-      ) {
-        yearObj
-          .coreMesh
-          .material
-          .opacity =
-            selected
-              ? 1
-              : 0.05;
-
-
-        yearObj
-          .haloMesh
-          .material
-          .opacity =
-            selected
-              ? 0.26
-              : 0.007;
-
-
-        yearObj
-          .orbitLine
-          .material
-          .opacity =
-            selected
-              ? 0.70
-              : 0.02;
-
-
-        yearObj
-          .monthLines
-          .material
-          .opacity =
-            selected
-              ? 0.52
-              : 0.03;
-
-
-        yearObj
-          .group
-          .scale
-          .setScalar(
-            selected
-              ? 1.04
-              : 1
-          );
-      }
-
-      else {
-        yearObj
-          .coreMesh
-          .material
-          .opacity =
-            hovered
-              ? Math.min(
-                  1,
-                  yearObj
-                    .coreBaseOpacity *
-                    1.15
-                )
-              : yearObj
-                  .coreBaseOpacity;
-
-
-        yearObj
-          .haloMesh
-          .material
-          .opacity =
-            hovered
-              ? Math.min(
-                  0.32,
-                  yearObj
-                    .haloBaseOpacity *
-                    1.8
-                )
-              : yearObj
-                  .haloBaseOpacity;
-
-
-        yearObj
-          .orbitLine
-          .material
-          .opacity =
-            hovered
-              ? 0.50
-              : (
-                  yearObj
-                    .stats
-                    .complete
-                    ? (
-                        0.12 +
-                        yearObj
-                          .stats
-                          .normalised *
-                          0.20
-                      )
-                    : 0.045
-                );
-
-
-        yearObj
-          .monthLines
-          .material
-          .opacity =
-            hovered
-              ? 0.44
-              : 0.24;
-
-
-        yearObj
-          .group
-          .scale
-          .setScalar(
-            hovered
-              ? 1.02
-              : 1
-          );
-      }
-    }
-  );
-
-
-  updateInfoPanel();
-}
-
-
-/* =========================================================
-   PICKING
-   ========================================================= */
-
-function setMouseFromEvent(
-  event
-) {
-  const rect =
-    map
-      .getContainer()
-      .getBoundingClientRect();
-
-
-  mouse.x =
-    (
-      (
-        event.clientX -
-        rect.left
-      ) /
-      rect.width
-    ) *
-      2 -
-    1;
-
-
-  mouse.y =
-    -(
-      (
-        event.clientY -
-        rect.top
-      ) /
-      rect.height
-    ) *
-      2 +
-    1;
-}
-
-
-function yearFromPointer(
-  event
-) {
-  if (
-    !camera ||
-    !raycaster
-  ) {
-    return null;
-  }
-
-
-  setMouseFromEvent(
-    event
-  );
-
-
-  raycaster.setFromCamera(
-    mouse,
-    camera
-  );
-
-
-  const hits =
-    raycaster.intersectObjects(
-      pickMeshes,
-      false
-    );
-
-
-  if (
-    !hits.length
-  ) {
-    return null;
-  }
-
-
-  return (
-    hits[0]
-      .object
-      .userData
-      .stats
-      ?.year ??
-    null
-  );
-}
-
-
-/* =========================================================
-   USER CONTROLS
-   ========================================================= */
-
-function shouldIgnorePointer(
-  event
-) {
-  const target =
-    event.target instanceof
-      Element
-      ? event.target
-      : null;
-
-
-  return Boolean(
-    target?.closest(
-      "button, a, .maplibregl-ctrl"
-    )
-  );
-}
-
-
-function attachOrbitControls() {
-  if (
-    controlsAttached
-  ) {
-    return;
-  }
-
-
-  controlsAttached =
-    true;
-
-
-  const container =
-    map.getContainer();
-
-
-  container.style.touchAction =
-    "none";
-
-
-  map.dragPan?.disable();
-
-  map.dragRotate?.disable();
-
-  map.scrollZoom?.disable();
-
-  map.doubleClickZoom?.disable();
-
-  map.keyboard?.disable();
-
-  map.touchZoomRotate?.disable();
-
-
-  container.addEventListener(
-    "pointerdown",
-    event => {
-      if (
-        shouldIgnorePointer(
-          event
-        )
-      ) {
-        return;
-      }
-
-
-      pointer.down =
-        true;
-
-
-      pointer.id =
-        event.pointerId;
-
-
-      pointer.x =
-        event.clientX;
-
-
-      pointer.y =
-        event.clientY;
-
-
-      pointer.moved =
-        false;
-
-
-      lastInteractionTime =
-        performance.now();
-
-
-      container
-        .setPointerCapture?.(
-          event.pointerId
-        );
-
-
-      container.style.cursor =
-        "grabbing";
-    }
-  );
-
-
-  container.addEventListener(
-    "pointermove",
-    event => {
-      if (
-        !pointer.down
-      ) {
-        const year =
-          yearFromPointer(
-            event
-          );
-
-
-        if (
-          year !==
-          hoveredYear
-        ) {
-          hoveredYear =
-            year;
-
-
-          updateYearAppearance();
-        }
-
-
-        container.style.cursor =
-          year !== null
-            ? "pointer"
-            : "grab";
-
-
-        return;
-      }
-
-
-      const dx =
-        event.clientX -
-        pointer.x;
-
-
-      const dy =
-        event.clientY -
-        pointer.y;
-
-
-      if (
-        Math.abs(dx) +
-          Math.abs(dy) >
-        2
-      ) {
-        pointer.moved =
-          true;
-      }
-
-
-      orbit.azimuth -=
-        dx *
-        0.0062;
-
-
-      orbit.polar +=
-        dy *
-        0.0052;
-
-
-      orbit.polar =
-        Math.min(
-          1.30,
-
-          Math.max(
-            0.08,
-            orbit.polar
-          )
-        );
-
-
-      pointer.x =
-        event.clientX;
-
-
-      pointer.y =
-        event.clientY;
-
-
-      lastInteractionTime =
-        performance.now();
-
-
-      updateCamera();
-
-      syncMapToOrbit();
-
-
-      const hint =
-        document.getElementById(
-          "temporal-sphere-hint"
-        );
-
-
-      if (
-        hint &&
-        orbit.polar >
-          0.18
-      ) {
-        hint.textContent =
-          "22 YEARS · 12 MONTH ORBITS PER YEAR · DAILY LIGHT CELLS";
-      }
-    }
-  );
-
-
-  container.addEventListener(
-    "pointerup",
-    event => {
-      if (
-        !pointer.down
-      ) {
-        return;
-      }
-
-
-      if (
-        !pointer.moved
-      ) {
-        const year =
-          yearFromPointer(
-            event
-          );
-
-
-        selectedYear =
-          year ===
-          selectedYear
-            ? null
-            : year;
-
-
-        updateYearAppearance();
-      }
-
-
-      pointer.down =
-        false;
-
-
-      pointer.id =
-        null;
-
-
-      lastInteractionTime =
-        performance.now();
-
-
-      container.style.cursor =
-        "grab";
-    }
-  );
-
-
-  container.addEventListener(
-    "pointercancel",
-    () => {
-      pointer.down =
-        false;
-
-
-      pointer.id =
-        null;
-
-
-      container.style.cursor =
-        "grab";
-    }
-  );
-
-
-  container.addEventListener(
-    "wheel",
-    event => {
-      if (
-        shouldIgnorePointer(
-          event
-        )
-      ) {
-        return;
-      }
-
-
-      event.preventDefault();
-
-
-      orbit.distance +=
-        event.deltaY *
-        0.0035;
-
-
-      orbit.distance =
-        Math.min(
-          11.0,
-
-          Math.max(
-            5.1,
-            orbit.distance
-          )
-        );
-
-
-      lastInteractionTime =
-        performance.now();
-
-
-      updateCamera();
-    },
-
-    {
-      passive:
-        false
-    }
-  );
-}
-
-
-/* =========================================================
-   CONTINUOUS MOTION
-   ========================================================= */
-
-function animate(
-  timestamp
-) {
+function animate(timestamp) {
   animationFrameId =
     requestAnimationFrame(
       animate
     );
-
-
-  if (
-    !renderer ||
-    !scene ||
-    !camera
-  ) {
-    return;
-  }
 
 
   const time =
@@ -2977,116 +1820,61 @@ function animate(
 
 
   /*
-   * Expensive day-instance
-   * transforms update at ~30 fps.
+   * Luminous flow around the
+   * invisible Year orbit.
    */
 
-  if (
-    timestamp -
-      lastHeavyFrame >
-    33
-  ) {
-    lastHeavyFrame =
-      timestamp;
+  yearFlowMaterial
+    .uniforms
+    .uTime
+    .value =
+      time;
 
 
-    updateDayInstances(
-      time
-    );
+  /*
+   * 12 Month ripple modules
+   * circulate slowly around Year.
+   */
+
+  monthOrbitOffset =
+    time *
+    0.075;
 
 
-    const recentInteraction =
-      timestamp -
-        lastInteractionTime <
-      1200;
+  updateMonths(
+    time
+  );
 
 
-    temporalSphere
-      .rotation
-      .y +=
-        (
-          recentInteraction
-            ? 0.004
-            : 0.020
-        ) *
-        0.033;
+  /*
+   * Entire 2025 hierarchy also
+   * slowly rotates in 3D.
+   */
+
+  systemGroup.rotation.x =
+    0.70 +
+    manualPitch +
+    Math.sin(
+      time *
+        0.12
+    ) *
+      0.10;
 
 
-    temporalSphere
-      .rotation
-      .x =
-        Math.sin(
-          time *
-          0.10
-        ) *
-        0.035;
+  systemGroup.rotation.y =
+    -0.30 +
+    manualYaw +
+    time *
+      0.087;
 
 
-    temporalSphere
-      .rotation
-      .z =
-        Math.cos(
-          time *
-          0.08
-        ) *
-        0.022;
-
-
-    atmosphereGroup
-      .rotation
-      .y =
-        -time *
-        0.012;
-
-
-    /*
-     * Each year has its own
-     * slow precession.
-     */
-
-    yearSystems.forEach(
-      yearObj => {
-        const t =
-          time *
-          yearObj.spinSpeed;
-
-
-        yearObj.group.rotation.x =
-          yearObj
-            .baseRotation
-            .x +
-          Math.sin(
-            t +
-            yearObj.phase
-          ) *
-            0.055;
-
-
-        yearObj.group.rotation.y =
-          yearObj
-            .baseRotation
-            .y +
-          Math.cos(
-            t *
-              0.83 +
-            yearObj.phase
-          ) *
-            0.060;
-
-
-        yearObj.group.rotation.z =
-          yearObj
-            .baseRotation
-            .z +
-          Math.sin(
-            t *
-              0.71 +
-            yearObj.phase
-          ) *
-            0.045;
-      }
-    );
-  }
+  systemGroup.rotation.z =
+    0.12 +
+    Math.cos(
+      time *
+        0.09
+    ) *
+      0.075;
 
 
   renderer.render(
@@ -3097,77 +1885,10 @@ function animate(
 
 
 /* =========================================================
-   RESET
-   ========================================================= */
-
-function resetScene() {
-  orbit.azimuth =
-    DEFAULT_ORBIT.azimuth;
-
-
-  orbit.polar =
-    DEFAULT_ORBIT.polar;
-
-
-  orbit.distance =
-    DEFAULT_ORBIT.distance;
-
-
-  selectedYear =
-    null;
-
-
-  hoveredYear =
-    null;
-
-
-  temporalSphere.rotation.set(
-    0,
-    0,
-    0
-  );
-
-
-  map.jumpTo({
-    center:
-      HK_CENTER,
-
-    zoom:
-      9.75,
-
-    pitch:
-      0,
-
-    bearing:
-      0
-  });
-
-
-  updateCamera();
-
-  updateYearAppearance();
-
-
-  const hint =
-    document.getElementById(
-      "temporal-sphere-hint"
-    );
-
-
-  if (
-    hint
-  ) {
-    hint.textContent =
-      "DRAG TO ORBIT THE LIVING DATA SPHERE";
-  }
-}
-
-
-/* =========================================================
    INITIALISE
    ========================================================= */
 
-async function initialiseTemporalSphere() {
+async function initialisePrototype() {
   const [
     threeModule,
     csvText
@@ -3192,100 +1913,39 @@ async function initialiseTemporalSphere() {
   );
 
 
-  buildNestedData();
+  createStage();
+
+  createThreeScene();
+
+  createYearOrbit();
+
+  createMonthSystems();
+
+  attachInteraction();
 
 
-  const start =
-    () => {
-      map.jumpTo({
-        center:
-          HK_CENTER,
-
-        zoom:
-          9.75,
-
-        pitch:
-          0,
-
-        bearing:
-          0
-      });
+  window.addEventListener(
+    "resize",
+    resize
+  );
 
 
-      createRenderer();
-
-      createScene();
-
-      buildNestedTemporalSphere();
-
-      ensureInterface();
-
-      resizeRenderer();
-
-      attachOrbitControls();
-
-
-      document
-        .getElementById(
-          "reset-view"
-        )
-        ?.addEventListener(
-          "click",
-          resetScene
-        );
-
-
-      const resizeObserver =
-        new ResizeObserver(
-          resizeRenderer
-        );
-
-
-      resizeObserver.observe(
-        map.getContainer()
-      );
-
-
-      if (
-        animationFrameId
-      ) {
-        cancelAnimationFrame(
-          animationFrameId
-        );
-      }
-
-
-      animationFrameId =
-        requestAnimationFrame(
-          animate
-        );
-
-
-      console.log(
-        "Thunder Rhythm nested particle sphere ready."
-      );
-    };
-
-
-  if (
-    map.loaded()
-  ) {
-    start();
-  }
-
-  else {
-    map.once(
-      "load",
-      start
+  animationFrameId =
+    requestAnimationFrame(
+      animate
     );
-  }
+
+
+  console.log(
+    "Thunder Rhythm 2025 Concentric Month Ripple Test ready."
+  );
 }
 
 
-initialiseTemporalSphere()
+initialisePrototype()
   .catch(error => {
     console.error(
-      "Nested particle sphere error:",
+      "2025 Concentric Month Ripple prototype error:",
       error
     );
   });

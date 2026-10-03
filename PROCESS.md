@@ -463,3 +463,115 @@ The prototype only tests:
 This simpler prototype makes it possible to evaluate the orbital motion itself before multiplying the system across the complete dataset.
 
 The next step is to preserve the successful single-Year structure and investigate how 22 real annual systems can be combined into one kinetic multi-orbit composition, inspired by layered generative geometry rather than a solid spherical shell.
+
+
+### From orbital day beads to concentric month ripples
+
+After establishing the Single-Year Orbital Skeleton, I began testing how daily lightning values could be represented inside each month.
+
+#### First attempt: daily rings orbiting around a monthly path
+
+The first approach treated each month as a medium-sized circular orbit.
+
+Each recorded day was then represented as an individual small ring positioned along that monthly orbit.
+
+For the 2025 test year, this produced:
+
+- 1 annual luminous orbit;
+- 12 monthly carrier paths;
+- 365 individual daily rings.
+
+The daily rings used real 2025 Hong Kong Observatory lightning counts. Lightning magnitude controlled the brightness, line thickness, and glow of each daily ring.
+
+The daily rings also circulated around their monthly path, and a small moving marker was introduced to make their local clockwise rotation visible.
+
+#### What worked
+
+This prototype successfully demonstrated the full spatial hierarchy:
+
+Year
+→ Month
+→ Day
+
+It also confirmed that all 365 daily records from 2025 could be rendered and animated while remaining attached to the correct month.
+
+The annual light-flow effect worked well and was retained as the visual language for the Year level.
+
+#### What did not work
+
+The daily rings were initially too small.
+
+When 28–31 small rings were distributed around each monthly orbit, they appeared fragmented and visually similar to beads or small mechanical parts.
+
+Increasing their size improved their visibility, but revealed a more fundamental problem: the structure itself did not match the intended temporal hierarchy.
+
+The resulting composition communicated:
+
+Month orbit
+→ many small objects travelling around it,
+
+rather than:
+
+Month
+→ a temporal structure composed of its days.
+
+This made the daily data feel decorative rather than structurally meaningful.
+
+The visible Year and Month carrier lines also added unnecessary geometry. The paths were useful computationally, but they did not need to remain visible in the final visual language.
+
+#### Revised interpretation of the month
+
+I therefore changed the relationship between Month and Day.
+
+Instead of placing 28–31 small rings around a monthly orbit, the entire Month is now represented as one concentric ripple system.
+
+Each daily value becomes one concentric ring:
+
+- Day 01 = innermost ring;
+- subsequent dates move progressively outward;
+- the final day of the month = outermost ring.
+
+This creates a much clearer temporal ordering because the geometry itself directly represents the sequence of days.
+
+Lightning magnitude continues to control:
+
+- ring brightness;
+- ring thickness;
+- glow intensity.
+
+Zero- or low-lightning days remain visible but faint, while high-lightning days become brighter and more prominent.
+
+#### Processing-inspired ripple motion
+
+The monthly concentric system was animated using a motion principle inspired by a Processing reference in which rings receive different vertical phase offsets.
+
+Instead of moving around the month, each daily ring remains concentric but oscillates slightly along its local Z axis.
+
+Conceptually:
+
+z = sin(time + day phase) × amplitude
+
+Because each day has a different phase, the complete month continuously changes from a flat circular structure into a ripple, bowl, or wave-like form.
+
+The chronological order of the days never changes.
+
+This gives the Month system a dynamic quality while preserving the underlying data structure.
+
+#### Current successful structure
+
+The 2025 prototype now consists of:
+
+Year
+→ one luminous moving annual orbit
+
+Month
+→ twelve concentric ripple modules positioned around the annual orbit
+
+Day
+→ 28–31 concentric rings inside each Month module
+
+The 2025 test contains all 365 daily records.
+
+This version is much closer to the intended visual language because temporal hierarchy is now embedded directly into the geometry rather than added as decorative orbiting objects.
+
+The next step is to refine the scale, ripple amplitude, motion speed, and overall visual balance of the Month modules before extending the successful single-year system to all 22 years from 2005 to 2026.
