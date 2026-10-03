@@ -662,3 +662,26 @@ The main questions for the next prototype are:
 - whether the complete composition still preserves enough negative space to remain readable.
 
 The Hong Kong map will remain temporarily excluded until the 22-year temporal structure is visually resolved.
+
+
+### Isolating the 22-year carrier-ring motion
+
+After several attempts to combine all Year → Month → Day structures at once, I found that the complexity of the month and day systems made it difficult to evaluate whether the year-level spatial structure itself was working.
+
+I therefore temporarily removed the Month systems, Daily rings, strong glow effects, and the Hong Kong map, and built a minimal 22-year carrier-ring prototype.
+
+In this version:
+
+- all 22 Year rings share exactly the same centre;
+- 2005 is the innermost and smallest ring;
+- the radius increases chronologically until 2026, which is the outermost ring;
+- each Year has a different initial Y-axis rotation phase;
+- each Year rotates around the Y axis at a slightly different speed;
+- the complete motif also rotates slowly around the Y axis;
+- an orthographic camera is used to create a flatter, diagrammatic, armillary-sphere-like appearance.
+
+This structure was adapted from the motion logic of an OpenProcessing reference in which multiple circular elements share the same origin but have different radii, initial Y rotations, and Y-axis rotation speeds.
+
+The simplified test was much more successful than the earlier full hierarchy experiments. The 22 rings now remain spatially coherent and form a nested kinetic structure rather than dispersing into a cloud of independent objects.
+
+The next step is to keep this carrier-ring motion unchanged and replace only the 2025 carrier ring with the complete 2025 Year module. This will test whether the existing Year → Month → Day visualisation can be embedded inside the successful carrier-ring motion system without changing the internal month and day design.
