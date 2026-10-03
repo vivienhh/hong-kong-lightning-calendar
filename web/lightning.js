@@ -1,73 +1,123 @@
 /* =========================================================
    THUNDER RHYTHM
-   PROTOTYPE 04-R2
+   PROTOTYPE 04-R3.4
 
-   22 YEAR CARRIER RINGS
+   RESTORE ORIGINAL 2025 YEAR LIGHT
 
-   PURPOSE
    ---------------------------------------------------------
-   Test ONLY the Year-level spatial and kinetic structure.
+   PRESERVED
 
-   No Month.
-   No Day.
-   No CSV.
-   No Hong Kong map.
-   No strong glow.
-   No Year-level X/Z wobble.
-   No random position.
+   R2:
+   - 22 Year wrappers
+   - same centre
+   - 2005 inner → 2026 outer
+   - different initial Y phases
+   - different Y rotation speeds
+   - master Y rotation
+   - Orthographic camera
 
-   Inspired by the structural logic of the reference:
+   Prototype 03.1:
+   - original 2025 Year light-particle shader
+   - original 84 particles
+   - original pulse behaviour
+   - original cyan / violet / white lighting
+   - original 12 Month layout
+   - original Daily concentric rings
+   - original ripple / breathing / halo motion
 
-   - all Elements share centre (0, 0, 0)
-   - different circleRadius
-   - different initial angleY
-   - different angleYAccel
-   - Motif itself also rotates around Y
+   ONLY deliberate visual modification:
+   - Month systems are scaled to 0.62
+     to leave more room for future multi-Year stacking.
 
-   Thunder Rhythm adaptation:
-
-   2005 = innermost ring
-   ...
-   2026 = outermost ring
-
-   All values are deterministic so the result is repeatable.
+   No map.
+   No annual-total mapping yet.
    ========================================================= */
 
 
 /* =========================================================
-   YEARS
+   DATA + YEARS
    ========================================================= */
 
-const START_YEAR = 2005;
-const END_YEAR = 2026;
+const LIGHTNING_DATA_PATH =
+  "./data/daily_HK_LGTG_ALL.csv";
 
-const YEARS = Array.from(
-  {
-    length:
-      END_YEAR -
+const TARGET_YEAR =
+  2025;
+
+const START_YEAR =
+  2005;
+
+const END_YEAR =
+  2026;
+
+const YEARS =
+  Array.from(
+    {
+      length:
+        END_YEAR -
+        START_YEAR +
+        1
+    },
+
+    (_, index) =>
       START_YEAR +
-      1
-  },
-
-  (_, index) =>
-    START_YEAR +
-    index
-);
+      index
+  );
 
 const YEAR_COUNT =
   YEARS.length;
 
+const MONTH_COUNT =
+  12;
+
+const MONTH_NAMES = [
+  "JAN",
+  "FEB",
+  "MAR",
+  "APR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AUG",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DEC"
+];
+
 
 /* =========================================================
-   YEAR GEOMETRY
+   ORIGINAL 2025 MODULE GEOMETRY
    ========================================================= */
 
+const YEAR_RADIUS =
+  2.0;
+
+const MONTH_INNER_RADIUS =
+  0.050;
+
+const MONTH_OUTER_RADIUS =
+  0.42;
+
+
 /*
- * Chronological radius:
- *
- * 2005 = smallest
- * 2026 = largest
+ * Only intentional modification
+ * relative to Prototype 03.1.
  */
+const MONTH_SYSTEM_SCALE =
+  0.62;
+
+
+const RIPPLE_INNER_AMPLITUDE =
+  0.055;
+
+const RIPPLE_OUTER_AMPLITUDE =
+  0.135;
+
+
+/* =========================================================
+   R2 YEAR CARRIER GEOMETRY
+   ========================================================= */
 
 const YEAR_RADIUS_MIN =
   0.52;
@@ -75,21 +125,8 @@ const YEAR_RADIUS_MIN =
 const YEAR_RADIUS_MAX =
   2.82;
 
-
-/*
- * Thin 3D carrier ring.
- *
- * No strong glow in this test.
- */
-
 const RING_TUBE_RADIUS =
   0.008;
-
-
-/*
- * Geometry quality.
- * Only 22 rings, so this is lightweight.
- */
 
 const RING_RADIAL_SEGMENTS =
   6;
@@ -99,15 +136,8 @@ const RING_TUBULAR_SEGMENTS =
 
 
 /* =========================================================
-   MOTION
+   R2 MOTION
    ========================================================= */
-
-/*
- * Individual Year rotation speed.
- *
- * All Years rotate in the same direction.
- * Only speed differs slightly.
- */
 
 const YEAR_SPEED_MIN =
   0.035;
@@ -115,41 +145,16 @@ const YEAR_SPEED_MIN =
 const YEAR_SPEED_MAX =
   0.075;
 
-
-/*
- * Entire motif also rotates,
- * matching the nested Motif → Element
- * logic of the reference.
- */
-
 const MASTER_Y_SPEED =
   0.016;
-
-
-/*
- * Deterministic low-discrepancy phase.
- *
- * The reference uses:
- *
- * angleY: random(PI)
- *
- * We use a reproducible spread
- * across 0 → PI instead.
- */
 
 const GOLDEN_PHASE =
   0.6180339887498949;
 
 
 /* =========================================================
-   CAMERA
+   ORTHOGRAPHIC CAMERA
    ========================================================= */
-
-/*
- * Reference uses ortho().
- *
- * We therefore use OrthographicCamera.
- */
 
 const ORTHO_VIEW_HEIGHT =
   6.65;
@@ -162,16 +167,52 @@ let cameraZoom =
    GLOBAL STATE
    ========================================================= */
 
-let THREE = null;
+let THREE =
+  null;
 
-let renderer = null;
-let scene = null;
-let camera = null;
-let stage = null;
+let renderer =
+  null;
 
-let masterMotif = null;
+let scene =
+  null;
 
-const yearSystems = [];
+let camera =
+  null;
+
+let stage =
+  null;
+
+let masterMotif =
+  null;
+
+const yearSystems =
+  [];
+
+
+/* =========================================================
+   2025 MODULE STATE
+   ========================================================= */
+
+let lightningRecords =
+  [];
+
+let records2025 =
+  [];
+
+let dailyLogCap =
+  1;
+
+let full2025Module =
+  null;
+
+let yearFlowMaterial2025 =
+  null;
+
+let monthOrbitOffset2025 =
+  0;
+
+const monthSystems2025 =
+  [];
 
 
 /* =========================================================
@@ -182,8 +223,11 @@ let manualMasterY =
   0;
 
 const pointer = {
-  down: false,
-  x: 0
+  down:
+    false,
+
+  x:
+    0
 };
 
 
@@ -198,6 +242,7 @@ function clamp(
 ) {
   return Math.max(
     minimum,
+
     Math.min(
       maximum,
       value
@@ -222,8 +267,206 @@ function lerp(
 }
 
 
+function daysInMonth(
+  year,
+  month
+) {
+  return new Date(
+    Date.UTC(
+      year,
+      month,
+      0
+    )
+  ).getUTCDate();
+}
+
+
+async function loadText(path) {
+  const response =
+    await fetch(path);
+
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      `Could not load ${path}: ${response.status}`
+    );
+  }
+
+  return response.text();
+}
+
+
 /* =========================================================
-   YEAR STYLE
+   DATA
+   ========================================================= */
+
+function parseLightningData(text) {
+  lightningRecords =
+    text
+      .trim()
+
+      .split(/\r?\n/)
+
+      .map(
+        line =>
+          line.trim()
+      )
+
+      .filter(Boolean)
+
+      .slice(3)
+
+      .map(line => {
+        const [
+          year,
+          month,
+          day,
+          value,
+          completeness
+        ] =
+          line.split(",");
+
+        return {
+          year:
+            Number(year),
+
+          month:
+            Number(month),
+
+          day:
+            Number(day),
+
+          value:
+            Number(value),
+
+          completeness:
+            completeness?.trim() ||
+            ""
+        };
+      })
+
+      .filter(record =>
+        Number.isFinite(
+          record.year
+        ) &&
+
+        Number.isFinite(
+          record.month
+        ) &&
+
+        Number.isFinite(
+          record.day
+        ) &&
+
+        Number.isFinite(
+          record.value
+        )
+      );
+
+
+  records2025 =
+    lightningRecords
+      .filter(
+        record =>
+          record.year ===
+          TARGET_YEAR
+      )
+
+      .sort(
+        (a, b) =>
+          (
+            a.month -
+            b.month
+          ) ||
+          (
+            a.day -
+            b.day
+          )
+      );
+
+
+  dailyLogCap =
+    calculateDailyLogCap(
+      records2025
+    );
+
+
+  console.log(
+    "2025 lightning records loaded:",
+    records2025.length
+  );
+}
+
+
+function calculateDailyLogCap(records) {
+  const values =
+    records
+      .filter(
+        record =>
+          record.value >
+          0
+      )
+
+      .map(
+        record =>
+          Math.log1p(
+            record.value
+          )
+      )
+
+      .sort(
+        (a, b) =>
+          a -
+          b
+      );
+
+
+  if (
+    !values.length
+  ) {
+    return 1;
+  }
+
+
+  const index =
+    Math.floor(
+      (
+        values.length -
+        1
+      ) *
+      0.98
+    );
+
+
+  return Math.max(
+    values[index],
+    1
+  );
+}
+
+
+function normaliseLightning(value) {
+  if (
+    value <=
+    0
+  ) {
+    return 0;
+  }
+
+
+  return clamp(
+    Math.log1p(value) /
+      dailyLogCap,
+
+    0,
+    1
+  );
+}
+
+
+/* =========================================================
+   SIMPLE YEAR STYLE
    ========================================================= */
 
 function yearColour(
@@ -233,25 +476,14 @@ function yearColour(
     yearIndex /
     Math.max(
       1,
-      YEAR_COUNT - 1
+      YEAR_COUNT -
+      1
     );
 
 
   const colour =
     new THREE.Color();
 
-
-  /*
-   * Thunder Rhythm palette:
-   *
-   * cyan
-   * → blue
-   * → lavender
-   * → violet
-   *
-   * Colour is NOT lightning magnitude here.
-   * It only helps distinguish the Year layers.
-   */
 
   const hue =
     0.51 +
@@ -277,14 +509,10 @@ function yearOpacity(
     yearIndex /
     Math.max(
       1,
-      YEAR_COUNT - 1
+      YEAR_COUNT -
+      1
     );
 
-
-  /*
-   * Slightly stronger outer rings,
-   * but deliberately restrained.
-   */
 
   return lerp(
     0.32,
@@ -295,27 +523,12 @@ function yearOpacity(
 
 
 /* =========================================================
-   INITIAL PHASE
+   R2 YEAR PHASE + SPEED
    ========================================================= */
 
 function initialYearPhase(
   yearIndex
 ) {
-  /*
-   * Equivalent purpose to:
-   *
-   * random(PI)
-   *
-   * but deterministic.
-   *
-   * It distributes rings across:
-   *
-   * circle
-   * ellipse
-   * narrow ellipse
-   * edge-on line
-   */
-
   const distributed =
     (
       yearIndex *
@@ -329,10 +542,6 @@ function initialYearPhase(
 }
 
 
-/* =========================================================
-   YEAR SPEED
-   ========================================================= */
-
 function yearRotationSpeed(
   yearIndex
 ) {
@@ -340,13 +549,10 @@ function yearRotationSpeed(
     yearIndex /
     Math.max(
       1,
-      YEAR_COUNT - 1
+      YEAR_COUNT -
+      1
     );
 
-
-  /*
-   * Basic chronological increase.
-   */
 
   const base =
     lerp(
@@ -355,13 +561,6 @@ function yearRotationSpeed(
       yearT
     );
 
-
-  /*
-   * Tiny deterministic variation.
-   *
-   * This stops all 22 rings from
-   * mechanically synchronising.
-   */
 
   const variation =
     Math.sin(
@@ -374,8 +573,147 @@ function yearRotationSpeed(
 
   return Math.max(
     0.015,
-    base + variation
+
+    base +
+      variation
   );
+}
+
+
+/* =========================================================
+   MONTH / DAY COLOUR
+   ORIGINAL 03.1
+   ========================================================= */
+
+function monthColour(index) {
+  const colour =
+    new THREE.Color();
+
+
+  const t =
+    index /
+    Math.max(
+      1,
+      MONTH_COUNT -
+      1
+    );
+
+
+  const hue =
+    0.50 +
+    t *
+      0.32;
+
+
+  colour.setHSL(
+    hue,
+    0.92,
+    0.64
+  );
+
+
+  return colour;
+}
+
+
+function dayColour(
+  monthIndex,
+  intensity
+) {
+  const base =
+    monthColour(
+      monthIndex
+    );
+
+
+  return base.lerp(
+    new THREE.Color(
+      0xffffff
+    ),
+
+    Math.pow(
+      intensity,
+      0.75
+    ) *
+      0.64
+  );
+}
+
+
+/* =========================================================
+   DAILY DATA → STYLE
+   ORIGINAL 03.1
+   ========================================================= */
+
+function intensityLevel(
+  intensity
+) {
+  if (
+    intensity ===
+    0
+  ) {
+    return 0;
+  }
+
+
+  if (
+    intensity <
+    0.20
+  ) {
+    return 1;
+  }
+
+
+  if (
+    intensity <
+    0.45
+  ) {
+    return 2;
+  }
+
+
+  if (
+    intensity <
+    0.72
+  ) {
+    return 3;
+  }
+
+
+  return 4;
+}
+
+
+function dayTubeRadius(level) {
+  return [
+    0.00160,
+    0.00220,
+    0.00310,
+    0.00460,
+    0.00680
+  ][level];
+}
+
+
+function dayOpacity(level) {
+  return [
+    0.080,
+    0.18,
+    0.36,
+    0.66,
+    0.96
+  ][level];
+}
+
+
+function glowOpacity(level) {
+  return [
+    0.000,
+    0.000,
+    0.035,
+    0.085,
+    0.170
+  ][level];
 }
 
 
@@ -386,6 +724,7 @@ function yearRotationSpeed(
 function createStage() {
   document.body.style.margin =
     "0";
+
 
   document.body.style.overflow =
     "hidden";
@@ -398,7 +737,7 @@ function createStage() {
 
 
   stage.id =
-    "year-carrier-ring-test";
+    "restore-original-year-light";
 
 
   Object.assign(
@@ -433,10 +772,6 @@ function createStage() {
   );
 
 
-  /* ---------------------------------------------------------
-     TITLE
-     --------------------------------------------------------- */
-
   const label =
     document.createElement(
       "div"
@@ -450,7 +785,7 @@ function createStage() {
       color:rgba(180,220,255,.55);
       margin-bottom:8px;
     ">
-      THUNDER RHYTHM · PROTOTYPE 04-R2
+      THUNDER RHYTHM · PROTOTYPE 04-R3.4
     </div>
 
     <div style="
@@ -459,7 +794,7 @@ function createStage() {
       letter-spacing:-.03em;
       color:#f7f8ff;
     ">
-      22 Year Carrier Rings
+      2025 Original Year Light Restore
     </div>
 
     <div style="
@@ -468,9 +803,9 @@ function createStage() {
       line-height:1.65;
       color:rgba(210,220,240,.55);
     ">
-      SHARED CENTRE · Y-AXIS ROTATION ONLY
+      ORIGINAL 03.1 YEAR LIGHT
       <br>
-      2005 INNER → 2026 OUTER
+      COMPACT MONTH SYSTEMS
     </div>
   `;
 
@@ -503,10 +838,6 @@ function createStage() {
     label
   );
 
-
-  /* ---------------------------------------------------------
-     INTERACTION HINT
-     --------------------------------------------------------- */
 
   const hint =
     document.createElement(
@@ -574,6 +905,7 @@ function createStage() {
 
 /* =========================================================
    THREE SCENE
+   R2 ORTHOGRAPHIC CAMERA
    ========================================================= */
 
 function createThreeScene() {
@@ -592,7 +924,9 @@ function createThreeScene() {
 
   renderer.setPixelRatio(
     Math.min(
-      window.devicePixelRatio || 1,
+      window.devicePixelRatio ||
+        1,
+
       1.5
     )
   );
@@ -631,16 +965,6 @@ function createThreeScene() {
     new THREE.Scene();
 
 
-  /*
-   * Orthographic camera:
-   *
-   * no perspective size distortion.
-   *
-   * This is one of the important
-   * visual characteristics of
-   * the OpenProcessing reference.
-   */
-
   camera =
     new THREE.OrthographicCamera(
       -1,
@@ -666,10 +990,6 @@ function createThreeScene() {
   );
 
 
-  /*
-   * Entire 22-Year Motif.
-   */
-
   masterMotif =
     new THREE.Group();
 
@@ -691,66 +1011,13 @@ function createThreeScene() {
 
 
 /* =========================================================
-   CREATE ONE YEAR CARRIER RING
+   SIMPLE R2 YEAR CARRIER
    ========================================================= */
 
-function createYearCarrier(
-  year,
-  yearIndex
+function createSimpleCarrierRing(
+  yearIndex,
+  radius
 ) {
-  const yearT =
-    yearIndex /
-    Math.max(
-      1,
-      YEAR_COUNT - 1
-    );
-
-
-  /*
-   * Strict chronology:
-   *
-   * 2005 → smallest
-   * 2026 → largest
-   */
-
-  const radius =
-    lerp(
-      YEAR_RADIUS_MIN,
-      YEAR_RADIUS_MAX,
-      yearT
-    );
-
-
-  /*
-   * Wrapper corresponds to
-   * OpenProcessing Element transform.
-   */
-
-  const wrapper =
-    new THREE.Group();
-
-
-  /*
-   * CRITICAL:
-   *
-   * Every Year has exactly
-   * the same origin.
-   */
-
-  wrapper.position.set(
-    0,
-    0,
-    0
-  );
-
-
-  /*
-   * Thin Torus carrier.
-   *
-   * A Torus rather than a flat LineLoop
-   * keeps the edge-on state visible.
-   */
-
   const geometry =
     new THREE.TorusGeometry(
       radius,
@@ -784,11 +1051,6 @@ function createYearCarrier(
       depthWrite:
         false,
 
-      /*
-       * Graphic layering rather than
-       * realistic 3D occlusion.
-       */
-
       depthTest:
         false,
 
@@ -804,23 +1066,849 @@ function createYearCarrier(
     );
 
 
-  /*
-   * Deterministic layering.
-   */
-
   ring.renderOrder =
     yearIndex;
 
 
-  wrapper.add(
-    ring
+  return ring;
+}
+
+
+/* =========================================================
+   2025 YEAR ORBIT
+   EXACT PROTOTYPE 03.1 LIGHT LOGIC
+   ========================================================= */
+
+function create2025YearOrbit(
+  parent
+) {
+  /*
+   * Original 03.1:
+   * invisible carrier,
+   * 84 moving luminous particles.
+   */
+
+  const PARTICLE_COUNT =
+    160;
+
+
+  const phases =
+    new Float32Array(
+      PARTICLE_COUNT
+    );
+
+
+  for (
+    let i = 0;
+    i < PARTICLE_COUNT;
+    i += 1
+  ) {
+    const regular =
+      (
+        i /
+        PARTICLE_COUNT
+      ) *
+      Math.PI *
+      2;
+
+
+    const offset =
+      Math.sin(
+        i *
+        12.9898
+      ) *
+      0.030;
+
+
+    phases[i] =
+      regular +
+      offset;
+  }
+
+
+  const flowGeometry =
+    new THREE.BufferGeometry();
+
+
+  flowGeometry.setAttribute(
+    "position",
+
+    new THREE.BufferAttribute(
+      new Float32Array(
+        PARTICLE_COUNT *
+        3
+      ),
+
+      3
+    )
+  );
+
+
+  flowGeometry.setAttribute(
+    "aPhase",
+
+    new THREE.BufferAttribute(
+      phases,
+      1
+    )
   );
 
 
   /*
-   * Equivalent to:
-   *
-   * angleY: random(PI)
+   * The shader below restores the
+   * original Prototype 03.1 values.
+   */
+
+  yearFlowMaterial2025 =
+    new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: {
+          value:
+            0
+        },
+
+        uRadius: {
+          value:
+            YEAR_RADIUS
+        }
+      },
+
+
+      vertexShader: `
+        uniform float uTime;
+        uniform float uRadius;
+
+        attribute float aPhase;
+
+        varying float vBrightness;
+
+
+        void main() {
+
+          float angle =
+            aPhase +
+            uTime * 0.34;
+
+
+          vec3 p =
+            vec3(
+              cos(angle) *
+                uRadius,
+
+              sin(angle) *
+                uRadius,
+
+              0.0
+            );
+
+
+          float pulseA =
+            0.5 +
+            0.5 *
+            sin(
+              angle * 5.0 -
+              uTime * 1.4
+            );
+
+
+          float pulseB =
+            0.5 +
+            0.5 *
+            sin(
+              angle * 11.0 +
+              uTime * 0.8
+            );
+
+
+          vBrightness =
+            0.24 +
+
+            pow(
+              pulseA,
+              7.0
+            ) *
+              0.58 +
+
+            pow(
+              pulseB,
+              10.0
+            ) *
+              0.38;
+
+
+          vec4 mvPosition =
+            modelViewMatrix *
+            vec4(
+              p,
+              1.0
+            );
+
+
+          gl_PointSize =
+            (
+              1.20 +
+              vBrightness *
+                2.40
+            ) *
+            (
+              220.0 /
+              -mvPosition.z
+            );
+
+
+          gl_Position =
+            projectionMatrix *
+            mvPosition;
+        }
+      `,
+
+
+      fragmentShader: `
+        precision highp float;
+
+        varying float vBrightness;
+
+
+        void main() {
+
+          vec2 p =
+            gl_PointCoord -
+            vec2(0.5);
+
+
+          float d =
+            length(p);
+
+
+          float alpha =
+            1.0 -
+            smoothstep(
+              0.08,
+              0.50,
+              d
+            );
+
+
+          float core =
+            1.0 -
+            smoothstep(
+              0.0,
+              0.15,
+              d
+            );
+
+
+          vec3 cyan =
+            vec3(
+              0.30,
+              0.92,
+              1.00
+            );
+
+
+          vec3 violet =
+            vec3(
+              0.83,
+              0.30,
+              1.00
+            );
+
+
+          vec3 colour =
+            mix(
+              cyan,
+              violet,
+              vBrightness *
+                0.52
+            );
+
+
+          colour =
+            mix(
+              colour,
+              vec3(1.0),
+
+              core *
+              vBrightness *
+                0.64
+            );
+
+
+          alpha *=
+            0.20 +
+            vBrightness *
+              0.82;
+
+
+          if (
+            alpha <
+            0.006
+          ) {
+            discard;
+          }
+
+
+          gl_FragColor =
+            vec4(
+              colour,
+              alpha
+            );
+        }
+      `,
+
+
+      transparent:
+        true,
+
+      depthWrite:
+        false,
+
+      depthTest:
+        true,
+
+      blending:
+        THREE.AdditiveBlending
+    });
+
+
+  const flowPoints =
+    new THREE.Points(
+      flowGeometry,
+      yearFlowMaterial2025
+    );
+
+
+  flowPoints.frustumCulled =
+    false;
+
+
+  parent.add(
+    flowPoints
+  );
+}
+
+
+/* =========================================================
+   2025 MONTH SYSTEMS
+   ORIGINAL 03.1 + SCALE 0.62
+   ========================================================= */
+
+function create2025MonthSystems(
+  parent
+) {
+  monthSystems2025.length =
+    0;
+
+
+  for (
+    let monthIndex = 0;
+    monthIndex < MONTH_COUNT;
+    monthIndex += 1
+  ) {
+    const monthNumber =
+      monthIndex +
+      1;
+
+
+    const calendarDays =
+      daysInMonth(
+        TARGET_YEAR,
+        monthNumber
+      );
+
+
+    const monthRecords =
+      records2025.filter(
+        record =>
+          record.month ===
+          monthNumber
+      );
+
+
+    const monthRoot =
+      new THREE.Group();
+
+
+    monthRoot.rotation.z =
+      monthIndex *
+      0.09;
+
+
+    /*
+     * Only modification to
+     * original Month module.
+     */
+    monthRoot.scale.setScalar(
+      MONTH_SYSTEM_SCALE
+    );
+
+
+    const days =
+      [];
+
+
+    monthRecords.forEach(
+      record => {
+        const intensity =
+          normaliseLightning(
+            record.value
+          );
+
+
+        const level =
+          intensityLevel(
+            intensity
+          );
+
+
+        const radialT =
+          (
+            record.day -
+            1
+          ) /
+          Math.max(
+            1,
+            calendarDays -
+            1
+          );
+
+
+        const ringRadius =
+          lerp(
+            MONTH_INNER_RADIUS,
+            MONTH_OUTER_RADIUS,
+            radialT
+          );
+
+
+        const colourDay =
+          dayColour(
+            monthIndex,
+            intensity
+          );
+
+
+        const dayRoot =
+          new THREE.Group();
+
+
+        /*
+         * Core Daily data ring.
+         */
+
+        const geometry =
+          new THREE.TorusGeometry(
+            ringRadius,
+
+            dayTubeRadius(
+              level
+            ),
+
+            7,
+            64
+          );
+
+
+        const material =
+          new THREE.MeshBasicMaterial({
+            color:
+              colourDay,
+
+            transparent:
+              true,
+
+            opacity:
+              dayOpacity(
+                level
+              ),
+
+            blending:
+              level >= 3
+                ? THREE.AdditiveBlending
+                : THREE.NormalBlending,
+
+            depthWrite:
+              false,
+
+            depthTest:
+              true
+          });
+
+
+        const ring =
+          new THREE.Mesh(
+            geometry,
+            material
+          );
+
+
+        dayRoot.add(
+          ring
+        );
+
+
+        /*
+         * Original 03.1 diffuse halo.
+         */
+
+        let haloRing =
+          null;
+
+
+        if (
+          level >=
+          2
+        ) {
+          const haloGeometry =
+            new THREE.TorusGeometry(
+              ringRadius,
+
+              dayTubeRadius(
+                level
+              ) *
+                3.2,
+
+              7,
+              64
+            );
+
+
+          haloRing =
+            new THREE.Mesh(
+              haloGeometry,
+
+              new THREE.MeshBasicMaterial({
+                color:
+                  colourDay,
+
+                transparent:
+                  true,
+
+                opacity:
+                  glowOpacity(
+                    level
+                  ),
+
+                blending:
+                  THREE.AdditiveBlending,
+
+                depthWrite:
+                  false,
+
+                depthTest:
+                  true
+              })
+            );
+
+
+          dayRoot.add(
+            haloRing
+          );
+        }
+
+
+        /*
+         * Original 03.1 secondary halo.
+         */
+
+        let outerHaloRing =
+          null;
+
+
+        if (
+          level >=
+          3
+        ) {
+          const outerHaloGeometry =
+            new THREE.TorusGeometry(
+              ringRadius,
+
+              dayTubeRadius(
+                level
+              ) *
+                5.5,
+
+              7,
+              64
+            );
+
+
+          outerHaloRing =
+            new THREE.Mesh(
+              outerHaloGeometry,
+
+              new THREE.MeshBasicMaterial({
+                color:
+                  colourDay,
+
+                transparent:
+                  true,
+
+                opacity:
+                  level ===
+                  4
+                    ? 0.045
+                    : 0.022,
+
+                blending:
+                  THREE.AdditiveBlending,
+
+                depthWrite:
+                  false,
+
+                depthTest:
+                  true
+              })
+            );
+
+
+          dayRoot.add(
+            outerHaloRing
+          );
+        }
+
+
+        monthRoot.add(
+          dayRoot
+        );
+
+
+        days.push({
+          day:
+            record.day,
+
+          value:
+            record.value,
+
+          intensity,
+
+          level,
+
+          radialT,
+
+          ringRadius,
+
+          root:
+            dayRoot,
+
+          ring,
+
+          haloRing,
+
+          outerHaloRing,
+
+          phase:
+            record.day *
+              0.43 +
+            monthIndex *
+              0.71
+        });
+      }
+    );
+
+
+    parent.add(
+      monthRoot
+    );
+
+
+    monthSystems2025.push({
+      index:
+        monthIndex,
+
+      month:
+        monthNumber,
+
+      name:
+        MONTH_NAMES[
+          monthIndex
+        ],
+
+      root:
+        monthRoot,
+
+      days,
+
+      calendarDays,
+
+      baseAngle:
+        (
+          monthIndex /
+          MONTH_COUNT
+        ) *
+        Math.PI *
+        2,
+
+      wobblePhase:
+        monthIndex *
+        0.63
+    });
+  }
+
+
+  console.log(
+    "2025 concentric hierarchy:",
+    monthSystems2025.length,
+    "months ·",
+
+    monthSystems2025.reduce(
+      (
+        total,
+        month
+      ) =>
+        total +
+        month.days.length,
+
+      0
+    ),
+
+    "daily concentric rings"
+  );
+}
+
+
+/* =========================================================
+   BUILD COMPLETE 2025 MODULE
+   ========================================================= */
+
+function buildFull2025Module() {
+  const root =
+    new THREE.Group();
+
+
+  create2025YearOrbit(
+    root
+  );
+
+
+  create2025MonthSystems(
+    root
+  );
+
+
+  return {
+    root
+  };
+}
+
+
+/* =========================================================
+   CREATE ONE YEAR WRAPPER
+   ========================================================= */
+
+function createYearCarrier(
+  year,
+  yearIndex
+) {
+  const yearT =
+    yearIndex /
+    Math.max(
+      1,
+      YEAR_COUNT -
+      1
+    );
+
+
+  const radius =
+    lerp(
+      YEAR_RADIUS_MIN,
+      YEAR_RADIUS_MAX,
+      yearT
+    );
+
+
+  const wrapper =
+    new THREE.Group();
+
+
+  wrapper.position.set(
+    0,
+    0,
+    0
+  );
+
+
+  let ring =
+    null;
+
+  let module =
+    null;
+
+
+  /*
+   * Only 2025 is currently expanded.
+   */
+
+  if (
+    year ===
+    TARGET_YEAR
+  ) {
+    module =
+      buildFull2025Module();
+
+
+    /*
+     * Scale the COMPLETE original
+     * Year module to its R2 radius.
+     *
+     * Internal proportions stay intact.
+     */
+
+    const moduleScale =
+      radius /
+      YEAR_RADIUS;
+
+
+    module.root.scale.setScalar(
+      moduleScale
+    );
+
+
+    wrapper.add(
+      module.root
+    );
+
+
+    full2025Module = {
+      ...module,
+
+      scale:
+        moduleScale,
+
+      targetRadius:
+        radius
+    };
+
+
+    console.log(
+      "2025 module scale:",
+      moduleScale.toFixed(
+        4
+      ),
+
+      "target radius:",
+      radius.toFixed(
+        4
+      )
+    );
+  }
+
+  else {
+    ring =
+      createSimpleCarrierRing(
+        yearIndex,
+        radius
+      );
+
+
+    wrapper.add(
+      ring
+    );
+  }
+
+
+  /*
+   * Exact R2 wrapper logic.
    */
 
   const initialY =
@@ -832,16 +1920,6 @@ function createYearCarrier(
   wrapper.rotation.y =
     initialY;
 
-
-  /*
-   * Equivalent to:
-   *
-   * angleYAccel:
-   * random(-0.01, 0.01)
-   *
-   * but positive and deterministic
-   * for this first test.
-   */
 
   const rotationSpeed =
     yearRotationSpeed(
@@ -865,6 +1943,8 @@ function createYearCarrier(
 
     ring,
 
+    module,
+
     initialY,
 
     rotationSpeed
@@ -873,7 +1953,7 @@ function createYearCarrier(
 
 
 /* =========================================================
-   BUILD ALL 22 YEARS
+   BUILD 22 YEAR WRAPPERS
    ========================================================= */
 
 function buildYearCarriers() {
@@ -891,7 +1971,7 @@ function buildYearCarriers() {
 
 
   console.log(
-    "Year carrier rings built:",
+    "Year wrappers built:",
     yearSystems.length
   );
 
@@ -906,23 +1986,292 @@ function buildYearCarriers() {
     "Chronological radius:",
     "2005 inner → 2026 outer"
   );
+
+
+  console.log(
+    "Expanded Year:",
+    TARGET_YEAR
+  );
 }
 
 
 /* =========================================================
-   MOTION
+   ORIGINAL 03.1 MONTH MOTION
    ========================================================= */
 
-function updateYearMotion(time) {
+function update2025Months(
+  time
+) {
+  const xAxis =
+    new THREE.Vector3(
+      1,
+      0,
+      0
+    );
+
+
+  const yAxis =
+    new THREE.Vector3(
+      0,
+      1,
+      0
+    );
+
+
+  const zAxis =
+    new THREE.Vector3(
+      0,
+      0,
+      1
+    );
+
+
+  monthSystems2025.forEach(
+    month => {
+      const monthAngle =
+        month.baseAngle +
+        monthOrbitOffset2025;
+
+
+      const cosMonth =
+        Math.cos(
+          monthAngle
+        );
+
+
+      const sinMonth =
+        Math.sin(
+          monthAngle
+        );
+
+
+      /*
+       * Original Month centres:
+       * equally spaced around Year orbit.
+       */
+
+      month.root.position.set(
+        cosMonth *
+          YEAR_RADIUS,
+
+        sinMonth *
+          YEAR_RADIUS,
+
+        0
+      );
+
+
+      /*
+       * Original tangent alignment.
+       */
+
+      const monthTangent =
+        new THREE.Vector3(
+          -sinMonth,
+          cosMonth,
+          0
+        ).normalize();
+
+
+      const alignment =
+        new THREE.Quaternion()
+          .setFromUnitVectors(
+            zAxis,
+            monthTangent
+          );
+
+
+      /*
+       * Original floating wobble.
+       */
+
+      const wobbleX =
+        new THREE.Quaternion()
+          .setFromAxisAngle(
+            xAxis,
+
+            Math.sin(
+              time *
+                0.36 +
+              month.wobblePhase
+            ) *
+              0.13
+          );
+
+
+      const wobbleY =
+        new THREE.Quaternion()
+          .setFromAxisAngle(
+            yAxis,
+
+            Math.cos(
+              time *
+                0.29 +
+              month.wobblePhase *
+                1.3
+            ) *
+              0.085
+          );
+
+
+      month.root.quaternion
+        .copy(
+          alignment
+        )
+
+        .multiply(
+          wobbleX
+        )
+
+        .multiply(
+          wobbleY
+        );
+
+
+      /*
+       * Original 03.1 Daily ripple.
+       */
+
+      month.days.forEach(
+        day => {
+          const amplitude =
+            lerp(
+              RIPPLE_INNER_AMPLITUDE,
+              RIPPLE_OUTER_AMPLITUDE,
+              day.radialT
+            );
+
+
+          const wave =
+            Math.sin(
+              time *
+                1.55 +
+              day.phase
+            );
+
+
+          day.root.position.z =
+            wave *
+            amplitude;
+
+
+          const breathe =
+            1 +
+            Math.sin(
+              time *
+                0.47 +
+              day.phase
+            ) *
+              0.006;
+
+
+          day.root.scale.setScalar(
+            breathe
+          );
+
+
+          if (
+            day.haloRing
+          ) {
+            const haloPulse =
+              1 +
+              Math.sin(
+                time *
+                  0.82 +
+                day.phase
+              ) *
+                0.026;
+
+
+            day.haloRing
+              .scale
+              .setScalar(
+                haloPulse
+              );
+          }
+
+
+          if (
+            day.outerHaloRing
+          ) {
+            const outerPulse =
+              1 +
+              Math.sin(
+                time *
+                  0.63 +
+                day.phase +
+                0.7
+              ) *
+                0.035;
+
+
+            day.outerHaloRing
+              .scale
+              .setScalar(
+                outerPulse
+              );
+          }
+        }
+      );
+    }
+  );
+}
+
+
+/* =========================================================
+   UPDATE COMPLETE 2025 MODULE
+   ========================================================= */
+
+function update2025Module(
+  time
+) {
+  if (
+    !full2025Module
+  ) {
+    return;
+  }
+
+
+  /*
+   * Exact original Year light speed.
+   */
+
+  yearFlowMaterial2025
+    .uniforms
+    .uTime
+    .value =
+      time;
+
+
+  /*
+   * Exact original Month circulation.
+   */
+
+  monthOrbitOffset2025 =
+    time *
+    0.075;
+
+
+  update2025Months(
+    time
+  );
+}
+
+
+/* =========================================================
+   R2 YEAR WRAPPER MOTION
+   ========================================================= */
+
+function updateYearMotion(
+  time
+) {
   yearSystems.forEach(
     system => {
       /*
-       * ONLY Y rotation.
+       * Year-level motion remains
+       * strictly R2:
        *
-       * No X rotation.
-       * No Z rotation.
-       * No wobble.
-       * No translation.
+       * Y axis only.
        */
 
       system.wrapper.rotation.x =
@@ -942,12 +2291,8 @@ function updateYearMotion(time) {
 
 
   /*
-   * Equivalent to Motif's own:
-   *
-   * angleYAccel
-   *
-   * The complete sculpture
-   * also turns slowly around Y.
+   * Whole 22-Year motif also
+   * slowly rotates around Y.
    */
 
   masterMotif.rotation.x =
@@ -1008,12 +2353,6 @@ function attachInteraction() {
         event.clientX -
         pointer.x;
 
-
-      /*
-       * Horizontal drag only.
-       *
-       * Still Y-axis rotation only.
-       */
 
       manualMasterY +=
         dx *
@@ -1083,7 +2422,7 @@ function attachInteraction() {
 
 
 /* =========================================================
-   CAMERA
+   ORTHOGRAPHIC CAMERA
    ========================================================= */
 
 function updateOrthographicCamera() {
@@ -1172,7 +2511,9 @@ function resize() {
    ANIMATION
    ========================================================= */
 
-function animate(timestamp) {
+function animate(
+  timestamp
+) {
   requestAnimationFrame(
     animate
   );
@@ -1182,6 +2523,21 @@ function animate(timestamp) {
     timestamp *
     0.001;
 
+
+  /*
+   * First:
+   * internal 2025 animation.
+   */
+
+  update2025Module(
+    time
+  );
+
+
+  /*
+   * Then:
+   * outer R2 Year-wrapper motion.
+   */
 
   updateYearMotion(
     time
@@ -1200,10 +2556,28 @@ function animate(timestamp) {
    ========================================================= */
 
 async function initialisePrototype() {
+  const [
+    threeModule,
+    csvText
+  ] =
+    await Promise.all([
+      import(
+        "https://cdn.jsdelivr.net/npm/three@0.180.0/+esm"
+      ),
+
+      loadText(
+        LIGHTNING_DATA_PATH
+      )
+    ]);
+
+
   THREE =
-    await import(
-      "https://cdn.jsdelivr.net/npm/three@0.180.0/+esm"
-    );
+    threeModule;
+
+
+  parseLightningData(
+    csvText
+  );
 
 
   createStage();
@@ -1227,7 +2601,7 @@ async function initialisePrototype() {
 
 
   console.log(
-    "Thunder Rhythm 22-Year Carrier Rings ready."
+    "Thunder Rhythm R3.4 Original Year Light restored."
   );
 }
 
@@ -1235,7 +2609,7 @@ async function initialisePrototype() {
 initialisePrototype()
   .catch(error => {
     console.error(
-      "22-Year Carrier Rings prototype error:",
+      "R3.4 Original Year Light error:",
       error
     );
   });
