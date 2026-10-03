@@ -378,3 +378,88 @@ The next prototype will therefore focus on:
 5. constructing each monthly ring from daily luminous units;
 6. making nested orbital motion visually clearer;
 7. preserving lightweight rendering so that the full daily dataset remains interactive.
+
+
+### Evaluating the full orbital hierarchy prototype
+
+After the earlier nested particle experiments, I attempted to construct the complete temporal hierarchy in one view:
+
+- 22 annual orbital systems for 2005–2026;
+- 12 monthly systems attached to each annual orbit;
+- 28–31 concentric daily rings inside each monthly system.
+
+The intended hierarchy was:
+
+Year
+→ Month
+→ Day
+
+Each annual orbit represented one year of Hong Kong lightning data. Twelve monthly systems were positioned along each annual orbit, while each month contained concentric daily rings ordered from the centre outward from Day 01 to the final day of the month.
+
+The prototype also introduced continuous motion: annual systems rotated in three-dimensional space, monthly systems circulated around their parent year, and animated highlights moved around the daily rings.
+
+#### What worked
+
+The experiment confirmed that the complete Year → Month → Day hierarchy could be represented programmatically.
+
+The browser was able to construct:
+
+- 22 year systems;
+- 264 month systems;
+- all 7,742 recorded daily values.
+
+It also confirmed that hierarchical transformations could work correctly. A month could remain attached to its parent year while the year itself rotated, which is important for the later interactive structure.
+
+The experiment therefore validated the basic parent-child motion model.
+
+#### What did not work visually
+
+Although the hierarchy was technically present, the complete composition became visually overexposed and difficult to read.
+
+The main problem was the use of a transparent shader plane for every month. With 264 month planes occupying a relatively small three-dimensional volume, many transparent surfaces overlapped from the camera view.
+
+Each monthly plane also contained up to 31 luminous daily rings. When hundreds of these transparent surfaces overlapped, their brightness accumulated and large areas became almost completely white.
+
+Instead of seeing:
+
+22 year orbits
+→ 12 month systems
+→ daily rings,
+
+the viewer mainly perceived a bright solid mass.
+
+This contradicted the intended visual reference, where the spherical form should emerge from open orbital structures, light trails, and negative space rather than from a filled or solid sphere.
+
+#### Important design lesson
+
+The experiment showed that the complete hierarchy should not be implemented all at once before the motion language of each level has been resolved.
+
+The visual hierarchy needs to be developed incrementally.
+
+A better development sequence is:
+
+1. design one annual orbit;
+2. attach twelve monthly rings and test their motion;
+3. duplicate the successful annual system into 22 years;
+4. only after the multi-year structure works, introduce the daily concentric rings;
+5. add the Hong Kong map and interface composition last.
+
+This allows each spatial relationship to be evaluated independently.
+
+#### Revised direction
+
+The project was therefore reduced to a Single-Year Orbital Skeleton prototype.
+
+For this stage, the Hong Kong map, daily rings, 22-year structure, and lightning magnitude encoding were temporarily removed.
+
+The prototype only tests:
+
+- one large Year orbit;
+- twelve Month rings;
+- continuous three-dimensional Year rotation;
+- twelve Month centres circulating along the Year orbit;
+- independent light movement around each Month ring.
+
+This simpler prototype makes it possible to evaluate the orbital motion itself before multiplying the system across the complete dataset.
+
+The next step is to preserve the successful single-Year structure and investigate how 22 real annual systems can be combined into one kinetic multi-orbit composition, inspired by layered generative geometry rather than a solid spherical shell.
