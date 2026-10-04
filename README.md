@@ -219,9 +219,13 @@ That difference became important in almost every later design decision.
 
 I then made both a **raw heatmap** and a **logarithmic heatmap** to see how different transformations changed the pattern that became visible.
 
-![Raw and logarithmic heatmap tests](out/heatmap-comparison.png)
+![Raw lightning heatmap](out/lightning-heatmap-raw.png)
 
-*Raw and logarithmic heatmap tests. The raw scale preserved the numerical differences but allowed extreme peaks to dominate, while the logarithmic version made medium-intensity activity easier to see.*
+*Raw heatmap using the original lightning counts.*
+
+![Logarithmic lightning heatmap](out/lightning-heatmap-log.png)
+
+*Logarithmic heatmap. Compressing the extreme values made medium-intensity activity easier to see.*
 
 The raw heatmap stays closer to the original numerical differences, but the largest values quickly dominate the image, making many medium- and low-intensity days difficult to distinguish.
 
@@ -269,7 +273,7 @@ This made the later design process much clearer.
 
 After that, I developed a **2025 radial calendar**.
 
-![2025 radial calendar prototype](out/radial-calendar-2025.png)
+![2025 radial calendar prototype](out/lightning-radial-2025.png)
 
 *2025 radial calendar prototype. This version made the seasonal pattern within one year visible, but it did not scale well when I tried to compare more than one year.*
 
