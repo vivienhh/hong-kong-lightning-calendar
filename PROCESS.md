@@ -742,3 +742,16 @@ To make the 3D structure easier to explore, I kept the automatic motion but also
 Finally, I added a small bar chart in the lower-right corner as a quantitative companion to the more expressive light-based visualisation. In the Year view, it shows monthly lightning totals from January to December. In the Month view, it shows daily lightning counts in chronological order. This gives users a more direct way to compare values while keeping the main concentric visualisation focused on temporal rhythm and intensity.
 
 For interaction, I used larger invisible hit areas around the visible rings. This improves hover and click accuracy without changing the appearance of the data marks.
+
+
+### Generalising the interaction across 2005–2026
+
+After the three-level interaction worked successfully with 2025, I generalised the prototype so that the same interaction structure could be generated from the data for any year between 2005 and 2026.
+
+Instead of creating a separate visualisation for every year, I refactored the 2025-specific functions and variables into reusable, data-driven functions. The selected year now determines which annual records, monthly totals, Daily rings and colour identity are used. This means the same Year → Month → Day interaction can be reused across the entire dataset while preserving the visual identity of each Year.
+
+The colour system also became dynamic. Each selected Year keeps the colour assigned to it in the overview, and its Month and Daily detail views inherit that colour family. Stronger lightning events move toward brighter and whiter tones, while lower-intensity events remain closer to the Year’s base colour.
+
+An important issue was incomplete temporal coverage. The dataset begins on 21 June 2005 and currently ends on 31 August 2026. I therefore treated missing records differently from genuine zero-lightning days. Months without records are shown as “NO DATA” rather than zero, and they cannot be opened as if Daily observations existed. The bar charts use the same distinction, so missing periods are not visually misrepresented as zero lightning.
+
+I tested the generalised system using both complete and partial years, including 2012, 2025, 2005 and 2026. This helped confirm that the same interaction structure could work across different Year colours, month lengths and coverage conditions without duplicating the visualisation code.
