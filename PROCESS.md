@@ -98,7 +98,7 @@ In the initial view, the user sees Hong Kong from almost directly above. From th
 
 When the user drags and lowers the viewing angle, the Hong Kong map becomes a horizontal plane and the light structure is revealed as a three-dimensional temporal object floating above it. This creates a perspective-based reveal: what first appeared to be a flat glow is actually a volume made from many years of lightning records.
 
-The map therefore answers the question of “where”, while the temporal light structure answers “when” and “how much”.
+The map provides geographic context for Hong Kong, while the temporal light structure represents “when” the lightning activity occurred and “how much” was recorded.
 
 #### First Three.js temporal sphere prototype
 
@@ -128,12 +128,15 @@ The temporal sphere will still contain the complete 2005–2026 hierarchy, but a
 Conceptually:
 
 Year
+
 → 12 monthly orbital systems
 
 Month
+
 → 28–31 daily light units
 
 Day
+
 → one real lightning count
 
 This creates a recursive visual system in which the same idea of light and orbit is repeated at different temporal scales.
@@ -157,12 +160,15 @@ For example, a low-lightning day should remain visually weak, while an extreme l
 The current visual language is:
 
 Time
+
 → position, sequence, nesting, and orbital structure
 
 Lightning count
+
 → brightness, line thickness, light intensity, and diffusion
 
 Colour
+
 → temporal progression rather than lightning magnitude
 
 This distinction is important because it prevents too many visual variables from representing the same quantity.
@@ -199,26 +205,37 @@ This allows the interface to preserve the full Year → Month → Day hierarchy 
 The intended experience is now:
 
 Top view
+
 → Hong Kong appears as a luminous geographic base
+
 → multiple years visually overlap into one concentrated field of light
 
 Drag / rotate
+
 → the map becomes a horizontal spatial plane
+
 → the light field reveals itself as a three-dimensional temporal sphere
+
 → the viewer can orbit around the object
 
 Inspect a year
+
 → the selected annual system becomes prominent
+
 → other years fade
+
 → annual statistics become visible
 
 Open a year
+
 → the annual system reveals twelve monthly orbital structures
 
 Open a month
+
 → the month expands into 28–31 daily light rings or light cells
 
 Inspect a day
+
 → exact date and daily lightning count are revealed
 
 This means the user is not switching between unrelated charts. Instead, the interaction behaves like moving deeper into the same temporal object.
@@ -237,8 +254,8 @@ The same visual language of light is maintained across all three scales.
 
 The key idea can currently be summarised as:
 
-> A year is a light made from twelve months.  
-> A month is a light made from its days.  
+> A year is a light made from twelve months.
+> A month is a light made from its days.
 > Twenty-two years accumulate above Hong Kong as a moving temporal field of lightning.
 
 The next step is to replace the current stacked annual torus prototype with a lightweight nested particle architecture while preserving the working map, camera interaction, annual data processing, and 360-degree viewing controls.
@@ -289,8 +306,11 @@ The invisible orbital structure can still be used mathematically to position and
 The conceptual hierarchy is:
 
 Temporal sphere
+
 → years
+
 → 12 months per year
+
 → 28–31 days per month.
 
 However, in the current prototype this hierarchy is still difficult to perceive visually.
@@ -304,12 +324,15 @@ Each monthly ring should then be constructed from its daily values. The daily un
 Therefore:
 
 22 year systems
+
 → each formed from 12 month rings
 
 12 month rings
+
 → each formed from 28–31 daily light cells
 
 Daily light cell
+
 → one real recorded daily lightning count.
 
 The supporting geometry should disappear, leaving only the nested light structures.
@@ -339,16 +362,18 @@ The current sphere visually competes with and encloses the Hong Kong map.
 The intended composition is instead:
 
 Temporal data sphere
+
 floating above
 
 ↓
 
 Hong Kong map
+
 as geographic stage.
 
-The map answers “where”.
+The map provides geographic context for Hong Kong.
 
-The temporal sphere answers “when” and “how much”.
+The temporal sphere represents “when” the lightning activity occurred and “how much” was recorded.
 
 The next iteration should therefore create clearer vertical separation between the two objects and allow the user to understand the sphere as something suspended above Hong Kong rather than wrapped around it.
 
@@ -359,12 +384,15 @@ The current test suggests that the final global view should not be built from vi
 Instead, it should be built from nested luminous units:
 
 Daily micro-rings
+
 → form monthly rings
 
 Monthly rings
+
 → form annual systems
 
 Annual systems
+
 → collectively form the temporal sphere.
 
 The resulting sphere should feel particle-like, luminous, orbital, and continuously moving. Its spherical appearance should emerge from the distribution and motion of the temporal elements rather than from a large visible spherical boundary or wire structure.
@@ -379,7 +407,6 @@ The next prototype will therefore focus on:
 6. making nested orbital motion visually clearer;
 7. preserving lightweight rendering so that the full daily dataset remains interactive.
 
-
 ### Evaluating the full orbital hierarchy prototype
 
 After the earlier nested particle experiments, I attempted to construct the complete temporal hierarchy in one view:
@@ -391,7 +418,9 @@ After the earlier nested particle experiments, I attempted to construct the comp
 The intended hierarchy was:
 
 Year
+
 → Month
+
 → Day
 
 Each annual orbit represented one year of Hong Kong lightning data. Twelve monthly systems were positioned along each annual orbit, while each month contained concentric daily rings ordered from the centre outward from Day 01 to the final day of the month.
@@ -423,7 +452,9 @@ Each monthly plane also contained up to 31 luminous daily rings. When hundreds o
 Instead of seeing:
 
 22 year orbits
+
 → 12 month systems
+
 → daily rings,
 
 the viewer mainly perceived a bright solid mass.
@@ -464,7 +495,6 @@ This simpler prototype makes it possible to evaluate the orbital motion itself b
 
 The next step is to preserve the successful single-Year structure and investigate how 22 real annual systems can be combined into one kinetic multi-orbit composition, inspired by layered generative geometry rather than a solid spherical shell.
 
-
 ### From orbital day beads to concentric month ripples
 
 After establishing the Single-Year Orbital Skeleton, I began testing how daily lightning values could be represented inside each month.
@@ -490,7 +520,9 @@ The daily rings also circulated around their monthly path, and a small moving ma
 This prototype successfully demonstrated the full spatial hierarchy:
 
 Year
+
 → Month
+
 → Day
 
 It also confirmed that all 365 daily records from 2025 could be rendered and animated while remaining attached to the correct month.
@@ -508,11 +540,13 @@ Increasing their size improved their visibility, but revealed a more fundamental
 The resulting composition communicated:
 
 Month orbit
+
 → many small objects travelling around it,
 
 rather than:
 
 Month
+
 → a temporal structure composed of its days.
 
 This made the daily data feel decorative rather than structurally meaningful.
@@ -549,7 +583,7 @@ Instead of moving around the month, each daily ring remains concentric but oscil
 
 Conceptually:
 
-z = sin(time + day phase) × amplitude
+`z = sin(time + day phase) × amplitude`
 
 Because each day has a different phase, the complete month continuously changes from a flat circular structure into a ripple, bowl, or wave-like form.
 
@@ -562,12 +596,15 @@ This gives the Month system a dynamic quality while preserving the underlying da
 The 2025 prototype now consists of:
 
 Year
+
 → one luminous moving annual orbit
 
 Month
+
 → twelve concentric ripple modules positioned around the annual orbit
 
 Day
+
 → 28–31 concentric rings inside each Month module
 
 The 2025 test contains all 365 daily records.
@@ -576,7 +613,6 @@ This version is much closer to the intended visual language because temporal hie
 
 The next step is to refine the scale, ripple amplitude, motion speed, and overall visual balance of the Month modules before extending the successful single-year system to all 22 years from 2005 to 2026.
 
-
 ### Refining the 2025 concentric month ripple system
 
 After confirming the concentric Month → Day structure, I refined the visual scale and luminous quality of the 2025 prototype.
@@ -584,15 +620,19 @@ After confirming the concentric Month → Day structure, I refined the visual sc
 The underlying hierarchy remained unchanged:
 
 Year
+
 → 12 Month ripple systems
+
 → 28–31 concentric Daily rings per month.
 
 Each daily ring still represents one date, ordered from the centre outward:
 
 Day 01
+
 → innermost ring
 
 Final day of the month
+
 → outermost ring
 
 Lightning magnitude continues to control ring brightness, thickness, and glow.
@@ -648,7 +688,9 @@ Each visible annual system will correspond to one real year from 2005 to 2026.
 The current Year → Month → Day structure will remain intact inside every year:
 
 Year
+
 → twelve Month ripple systems
+
 → daily concentric rings.
 
 The 22 annual systems will then be arranged as a layered kinetic temporal field rather than as a solid sphere.
@@ -662,7 +704,6 @@ The main questions for the next prototype are:
 - whether the complete composition still preserves enough negative space to remain readable.
 
 The Hong Kong map will remain temporarily excluded until the 22-year temporal structure is visually resolved.
-
 
 ### Isolating the 22-year carrier-ring motion
 
@@ -686,7 +727,6 @@ The simplified test was much more successful than the earlier full hierarchy exp
 
 The next step is to keep this carrier-ring motion unchanged and replace only the 2025 carrier ring with the complete 2025 Year module. This will test whether the existing Year → Month → Day visualisation can be embedded inside the successful carrier-ring motion system without changing the internal month and day design.
 
-
 ### Integrating the 2025 module into the 22-year carrier system
 
 After confirming the 22-year carrier-ring motion, I reintroduced the complete 2025 Year → Month → Day module into the larger structure. The first integration showed that the original Month ripple systems were too large for future multi-year stacking, so I reduced each Month system while keeping its position, Daily-ring structure, and ripple motion unchanged.
@@ -696,7 +736,6 @@ I also tested several alternatives for the Year-level light, including denser pa
 To reduce visible gaps without making the light blobs too large, I increased the particle density, reduced the random phase offset, raised the minimum brightness, and slightly reduced the point size. This produced a more continuous but still uneven and luminous Year orbit.
 
 The earlier standalone 2025 prototype is still preserved separately as a reference. This iteration confirmed that the next step should be to test multiple complete Year modules gradually rather than expanding all 22 years at once.
-
 
 ### Encoding annual lightning intensity across 2020–2026
 
@@ -710,13 +749,11 @@ I used a logarithmic normalisation for annual totals so that extreme values woul
 
 This iteration establishes a clearer data hierarchy: radius represents time, the Year orbit represents annual intensity, and the concentric Daily rings represent day-level lightning activity.
 
-
 ### Testing the complete 2005–2026 hierarchy
 
 I expanded the full Year → Month → Day structure to all 22 years from 2005 to 2026. Although the complete dataset could be rendered successfully, displaying all monthly and daily structures simultaneously caused severe visual overlap and additive-light overexposure. The central region became difficult to read, and differences between individual years were obscured.
 
 This test showed that simply reducing brightness would not solve the underlying information-density problem. I therefore decided to keep the detailed Month and Day structures for selected-year views, while redesigning the overview as a compressed yearly rhythm. In the next iteration, each Year orbit will retain annual and monthly variation directly on the ring, using colour, thickness, brightness, and local rhythm rather than displaying every Daily ring at once.
-
 
 ### Establishing the compressed Year-rhythm overview
 
@@ -727,7 +764,6 @@ In the current overview, chronological order is represented by radius, annual li
 I also refined the visual language from solid particles into softer flowing light clusters with controlled diffusion. The colour system was adjusted toward layered gold, lemon yellow, champagne and yellow-white tones, with a small number of icy blue and lavender accents to preserve separation between overlapping years.
 
 This version is treated as the initial visual baseline for the 2005–2026 overview before adding interactive Year selection and Month/Day unfolding.
-
 
 ### Building the interactive temporal hierarchy
 
@@ -743,7 +779,6 @@ Finally, I added a small bar chart in the lower-right corner as a quantitative c
 
 For interaction, I used larger invisible hit areas around the visible rings. This improves hover and click accuracy without changing the appearance of the data marks.
 
-
 ### Generalising the interaction across 2005–2026
 
 After the three-level interaction worked successfully with 2025, I generalised the prototype so that the same interaction structure could be generated from the data for any year between 2005 and 2026.
@@ -755,7 +790,6 @@ The colour system also became dynamic. Each selected Year keeps the colour assig
 An important issue was incomplete temporal coverage. The dataset begins on 21 June 2005 and currently ends on 31 August 2026. I therefore treated missing records differently from genuine zero-lightning days. Months without records are shown as “NO DATA” rather than zero, and they cannot be opened as if Daily observations existed. The bar charts use the same distinction, so missing periods are not visually misrepresented as zero lightning.
 
 I tested the generalised system using both complete and partial years, including 2012, 2025, 2005 and 2026. This helped confirm that the same interaction structure could work across different Year colours, month lengths and coverage conditions without duplicating the visualisation code.
-
 
 ### Final interaction and presentation polish
 
