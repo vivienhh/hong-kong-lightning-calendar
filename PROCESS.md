@@ -709,3 +709,10 @@ I then mapped each year's total lightning count to the visual appearance of its 
 I used a logarithmic normalisation for annual totals so that extreme values would not visually overpower the other years. The strongest year is capped at the previously tested maximum visual intensity. The 2026 module uses only the available partial-year observations rather than extrapolating missing future dates.
 
 This iteration establishes a clearer data hierarchy: radius represents time, the Year orbit represents annual intensity, and the concentric Daily rings represent day-level lightning activity.
+
+
+### Testing the complete 2005–2026 hierarchy
+
+I expanded the full Year → Month → Day structure to all 22 years from 2005 to 2026. Although the complete dataset could be rendered successfully, displaying all monthly and daily structures simultaneously caused severe visual overlap and additive-light overexposure. The central region became difficult to read, and differences between individual years were obscured.
+
+This test showed that simply reducing brightness would not solve the underlying information-density problem. I therefore decided to keep the detailed Month and Day structures for selected-year views, while redesigning the overview as a compressed yearly rhythm. In the next iteration, each Year orbit will retain annual and monthly variation directly on the ring, using colour, thickness, brightness, and local rhythm rather than displaying every Daily ring at once.

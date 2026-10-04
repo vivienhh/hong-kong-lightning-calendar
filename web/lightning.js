@@ -1,16 +1,37 @@
 /* =========================================================
    THUNDER RHYTHM
-   PROTOTYPE 04-R5
+   PROTOTYPE 04-R6
 
-   2020–2026 FULL DATA MODULES
+   2005–2026 FULL DATA MODULES
    + ANNUAL YEAR ENCODING
 
-   Year radius = chronology
-   Year thickness / brightness / tint = annual lightning total
-   Month size = 60% of previous R4 size
-   Month / Day brightness = 80% of previous R4 brightness
+   DATA HIERARCHY
+   ---------------------------------------------------------
 
-   2026 remains partial according to the available HKO data.
+   Year radius
+   = chronology
+   2005 inner → 2026 outer
+
+   Year orbit:
+   - thickness
+   - brightness
+   - colour
+   = annual lightning total
+
+   Month:
+   - 12 temporal modules
+   - reduced scale for multi-year readability
+
+   Day:
+   - concentric Daily rings
+   - brightness / thickness / glow
+   = Daily lightning activity
+
+   2005 and 2026 use only
+   the observations available
+   in the HKO dataset.
+
+   No missing dates are estimated.
    ========================================================= */
 
 
@@ -21,17 +42,22 @@
 const LIGHTNING_DATA_PATH =
   "./data/daily_HK_LGTG_ALL.csv";
 
+
 const FULL_DATA_START_YEAR =
-  2020;
+  2005;
+
 
 const FULL_DATA_END_YEAR =
   2026;
 
+
 const START_YEAR =
   2005;
 
+
 const END_YEAR =
   2026;
+
 
 const YEARS =
   Array.from(
@@ -47,11 +73,14 @@ const YEARS =
       index
   );
 
+
 const YEAR_COUNT =
   YEARS.length;
 
+
 const MONTH_COUNT =
   12;
+
 
 const MONTH_NAMES = [
   "JAN",
@@ -76,70 +105,85 @@ const MONTH_NAMES = [
 const YEAR_RADIUS =
   2.0;
 
+
 const MONTH_INNER_RADIUS =
   0.050;
+
 
 const MONTH_OUTER_RADIUS =
   0.42;
 
+
 /*
- * Previous R4 value = 0.62.
- * Current request = 60% of that.
- * 0.62 × 0.60 = 0.372.
+ * Previous value:
+ * 0.62
+ *
+ * Current visual:
+ * 60% of previous size.
  */
 const MONTH_SYSTEM_SCALE =
   0.372;
 
+
 const RIPPLE_INNER_AMPLITUDE =
   0.055;
+
 
 const RIPPLE_OUTER_AMPLITUDE =
   0.135;
 
 
 /* =========================================================
-   R2 YEAR CARRIER GEOMETRY
+   YEAR CARRIER GEOMETRY
    ========================================================= */
 
 const YEAR_RADIUS_MIN =
   0.52;
 
+
 const YEAR_RADIUS_MAX =
   2.82;
+
 
 const RING_TUBE_RADIUS =
   0.008;
 
+
 const RING_RADIAL_SEGMENTS =
   6;
+
 
 const RING_TUBULAR_SEGMENTS =
   160;
 
 
 /* =========================================================
-   R2 MOTION
+   YEAR MOTION
    ========================================================= */
 
 const YEAR_SPEED_MIN =
   0.035;
 
+
 const YEAR_SPEED_MAX =
   0.075;
 
+
 const MASTER_Y_SPEED =
   0.016;
+
 
 const GOLDEN_PHASE =
   0.6180339887498949;
 
 
 /* =========================================================
-   ORTHOGRAPHIC CAMERA
+   CAMERA
    ========================================================= */
 
 const ORTHO_VIEW_HEIGHT =
   6.65;
+
 
 let cameraZoom =
   1.0;
@@ -152,20 +196,26 @@ let cameraZoom =
 let THREE =
   null;
 
+
 let renderer =
   null;
+
 
 let scene =
   null;
 
+
 let camera =
   null;
+
 
 let stage =
   null;
 
+
 let masterMotif =
   null;
+
 
 const yearSystems =
   [];
@@ -178,18 +228,26 @@ const yearSystems =
 let lightningRecords =
   [];
 
+
 const recordsByYear =
   new Map();
+
 
 const annualStatsByYear =
   new Map();
 
+
 let dailyLogCap =
   1;
+
 
 const fullYearModules =
   [];
 
+
+/* =========================================================
+   YEAR RANGE HELPER
+   ========================================================= */
 
 function isFullDataYear(year) {
   return (
@@ -207,6 +265,7 @@ function isFullDataYear(year) {
 
 let manualMasterY =
   0;
+
 
 const pointer = {
   down:
@@ -271,6 +330,7 @@ async function loadText(path) {
   const response =
     await fetch(path);
 
+
   if (
     !response.ok
   ) {
@@ -279,12 +339,13 @@ async function loadText(path) {
     );
   }
 
+
   return response.text();
 }
 
 
 /* =========================================================
-   DATA
+   DATA PARSING
    ========================================================= */
 
 function parseLightningData(text) {
@@ -301,6 +362,13 @@ function parseLightningData(text) {
 
       .filter(Boolean)
 
+      /*
+       * HKO CSV:
+       *
+       * line 1 = Chinese title
+       * line 2 = English title
+       * line 3 = headings
+       */
       .slice(3)
 
       .map(line => {
@@ -312,6 +380,7 @@ function parseLightningData(text) {
           completeness
         ] =
           line.split(",");
+
 
         return {
           year:
@@ -351,6 +420,10 @@ function parseLightningData(text) {
       );
 
 
+  /*
+   * Divide the complete CSV
+   * into one array per Year.
+   */
   recordsByYear.clear();
 
 
@@ -381,9 +454,11 @@ function parseLightningData(text) {
 
 
   /*
-   * Shared daily intensity scale:
-   * all 2020–2026 Daily rings use
-   * the same 98th-percentile log cap.
+   * All 2005–2026 Daily values
+   * share one normalisation scale.
+   *
+   * This makes Daily intensity
+   * comparable across Years.
    */
   const expandedRecords =
     lightningRecords.filter(
@@ -400,43 +475,123 @@ function parseLightningData(text) {
     );
 
 
+  /*
+   * Calculate annual totals
+   * for Year-level encoding.
+   */
   calculateAnnualStats();
 
 
   console.log(
-    "Shared 2020–2026 lightning records loaded:",
+    "Shared 2005–2026 lightning records loaded:",
     expandedRecords.length
   );
 
 
-  YEARS
-    .filter(
-      isFullDataYear
-    )
-
-    .forEach(year => {
-      const records =
-        recordsByYear.get(
-          year
-        ) ||
-        [];
+  YEARS.forEach(year => {
+    const records =
+      recordsByYear.get(
+        year
+      ) ||
+      [];
 
 
-      console.log(
-        `${year} records:`,
-        records.length,
+    console.log(
+      `${year} records:`,
 
-        records.length
-          ? `through ${
-              records.at(-1).month
-            }/${
-              records.at(-1).day
-            }`
-          : "no records"
-      );
-    });
+      records.length,
+
+      records.length
+        ? `through ${
+            records.at(-1).month
+          }/${
+            records.at(-1).day
+          }`
+        : "no records"
+    );
+  });
 }
 
+
+/* =========================================================
+   DAILY NORMALISATION
+   ========================================================= */
+
+function calculateDailyLogCap(records) {
+  const values =
+    records
+      .filter(
+        record =>
+          record.value >
+          0
+      )
+
+      .map(
+        record =>
+          Math.log1p(
+            record.value
+          )
+      )
+
+      .sort(
+        (a, b) =>
+          a -
+          b
+      );
+
+
+  if (
+    !values.length
+  ) {
+    return 1;
+  }
+
+
+  /*
+   * 98th percentile prevents
+   * one extreme lightning event
+   * from visually flattening
+   * all ordinary active days.
+   */
+  const index =
+    Math.floor(
+      (
+        values.length -
+        1
+      ) *
+      0.98
+    );
+
+
+  return Math.max(
+    values[index],
+    1
+  );
+}
+
+
+function normaliseLightning(value) {
+  if (
+    value <=
+    0
+  ) {
+    return 0;
+  }
+
+
+  return clamp(
+    Math.log1p(value) /
+      dailyLogCap,
+
+    0,
+    1
+  );
+}
+
+
+/* =========================================================
+   ANNUAL LIGHTNING TOTALS
+   ========================================================= */
 
 function calculateAnnualStats() {
   annualStatsByYear.clear();
@@ -538,6 +693,7 @@ function calculateAnnualStats() {
 
       console.log(
         `${stat.year} annual lightning:`,
+
         stat.total,
 
         "strength:",
@@ -547,72 +703,6 @@ function calculateAnnualStats() {
         )
       );
     }
-  );
-}
-
-
-function calculateDailyLogCap(records) {
-  const values =
-    records
-      .filter(
-        record =>
-          record.value >
-          0
-      )
-
-      .map(
-        record =>
-          Math.log1p(
-            record.value
-          )
-      )
-
-      .sort(
-        (a, b) =>
-          a -
-          b
-      );
-
-
-  if (
-    !values.length
-  ) {
-    return 1;
-  }
-
-
-  const index =
-    Math.floor(
-      (
-        values.length -
-        1
-      ) *
-      0.98
-    );
-
-
-  return Math.max(
-    values[index],
-    1
-  );
-}
-
-
-function normaliseLightning(value) {
-  if (
-    value <=
-    0
-  ) {
-    return 0;
-  }
-
-
-  return clamp(
-    Math.log1p(value) /
-      dailyLogCap,
-
-    0,
-    1
   );
 }
 
@@ -675,7 +765,7 @@ function yearOpacity(
 
 
 /* =========================================================
-   R2 YEAR PHASE + SPEED
+   YEAR PHASE + SPEED
    ========================================================= */
 
 function initialYearPhase(
@@ -750,6 +840,12 @@ function monthColour(index) {
     );
 
 
+  /*
+   * cyan
+   * → blue
+   * → violet
+   * → magenta
+   */
   const hue =
     0.50 +
     t *
@@ -834,6 +930,9 @@ function intensityLevel(
 }
 
 
+/*
+ * Daily ring thickness.
+ */
 function dayTubeRadius(level) {
   return [
     0.00160,
@@ -845,6 +944,11 @@ function dayTubeRadius(level) {
 }
 
 
+/*
+ * Current brightness:
+ * approximately 80% of
+ * the earlier version.
+ */
 function dayOpacity(level) {
   return [
     0.064,
@@ -856,6 +960,11 @@ function dayOpacity(level) {
 }
 
 
+/*
+ * Current halo brightness:
+ * approximately 80% of
+ * the earlier version.
+ */
 function glowOpacity(level) {
   return [
     0.000,
@@ -887,7 +996,7 @@ function createStage() {
 
 
   stage.id =
-    "thunder-rhythm-r5";
+    "thunder-rhythm-r6";
 
 
   Object.assign(
@@ -935,7 +1044,7 @@ function createStage() {
       color:rgba(180,220,255,.55);
       margin-bottom:8px;
     ">
-      THUNDER RHYTHM · PROTOTYPE 04-R5
+      THUNDER RHYTHM · PROTOTYPE 04-R6
     </div>
 
     <div style="
@@ -944,7 +1053,7 @@ function createStage() {
       letter-spacing:-.03em;
       color:#f7f8ff;
     ">
-      2020–2026 Lightning Rhythm
+      2005–2026 Lightning Rhythm
     </div>
 
     <div style="
@@ -1160,7 +1269,7 @@ function createThreeScene() {
 
 
 /* =========================================================
-   SIMPLE R2 YEAR CARRIER
+   SIMPLE YEAR CARRIER
    ========================================================= */
 
 function createSimpleCarrierRing(
@@ -1231,6 +1340,13 @@ function createYearOrbit(
   parent,
   yearStrength
 ) {
+  /*
+   * Final visual setting:
+   *
+   * dense particles
+   * low gap
+   * relatively thin Year light
+   */
   const PARTICLE_COUNT =
     160;
 
@@ -1388,6 +1504,16 @@ function createYearOrbit(
             );
 
 
+          /*
+           * Annual lightning controls
+           * Year-orbit thickness.
+           *
+           * Lowest Year:
+           * 72% of maximum thickness.
+           *
+           * Highest Year:
+           * current tested maximum.
+           */
           float yearThickness =
             mix(
               0.72,
@@ -1479,6 +1605,16 @@ function createYearOrbit(
             );
 
 
+          /*
+           * Annual total also changes
+           * colour direction.
+           *
+           * Lower total:
+           * cyan / blue.
+           *
+           * Higher total:
+           * violet / white.
+           */
           vec3 lowYearColour =
             vec3(
               0.24,
@@ -1526,6 +1662,13 @@ function createYearOrbit(
             );
 
 
+          /*
+           * Keep alpha intact.
+           *
+           * Earlier tests showed
+           * reducing alpha caused
+           * the Year orbit to disappear.
+           */
           alpha *=
             0.20 +
             vBrightness *
@@ -1540,6 +1683,16 @@ function createYearOrbit(
           }
 
 
+          /*
+           * Annual total controls
+           * Year brightness.
+           *
+           * Lowest Year:
+           * 0.58
+           *
+           * Highest Year:
+           * 0.80
+           */
           float annualBrightness =
             mix(
               0.58,
@@ -1623,6 +1776,15 @@ function createMonthSystems(
       );
 
 
+    /*
+     * Important:
+     *
+     * Partial Years such as 2005
+     * and 2026 only contain Month
+     * records that truly exist.
+     *
+     * Missing Months are not filled.
+     */
     const monthRecords =
       yearRecords.filter(
         record =>
@@ -1663,6 +1825,12 @@ function createMonthSystems(
           );
 
 
+        /*
+         * Day chronology becomes radius.
+         *
+         * Day 01 = inner ring.
+         * Final calendar date = outer ring.
+         */
         const radialT =
           (
             record.day -
@@ -1695,6 +1863,9 @@ function createMonthSystems(
           new THREE.Group();
 
 
+        /*
+         * Core Daily ring.
+         */
         const geometry =
           new THREE.TorusGeometry(
             ringRadius,
@@ -1747,6 +1918,9 @@ function createMonthSystems(
         );
 
 
+        /*
+         * Diffuse halo.
+         */
         let haloRing =
           null;
 
@@ -1803,6 +1977,9 @@ function createMonthSystems(
         }
 
 
+        /*
+         * Secondary outer halo.
+         */
         let outerHaloRing =
           null;
 
@@ -1889,6 +2066,9 @@ function createMonthSystems(
 
           outerHaloRing,
 
+          /*
+           * Day-dependent animation phase.
+           */
           phase:
             record.day *
               0.43 +
@@ -1989,6 +2169,10 @@ function buildFullYearModule(
     };
 
 
+  /*
+   * Year light receives
+   * annual normalised strength.
+   */
   const yearFlowMaterial =
     createYearOrbit(
       root,
@@ -1996,6 +2180,12 @@ function buildFullYearModule(
     );
 
 
+  /*
+   * Build 12 Month positions.
+   *
+   * Only available Daily records
+   * generate rings.
+   */
   const monthSystems =
     createMonthSystems(
       root,
@@ -2042,6 +2232,12 @@ function createYearCarrier(
     );
 
 
+  /*
+   * Chronological radius:
+   *
+   * 2005 smallest
+   * 2026 largest
+   */
   const radius =
     lerp(
       YEAR_RADIUS_MIN,
@@ -2054,6 +2250,10 @@ function createYearCarrier(
     new THREE.Group();
 
 
+  /*
+   * Every Year shares
+   * exactly the same centre.
+   */
   wrapper.position.set(
     0,
     0,
@@ -2069,6 +2269,10 @@ function createYearCarrier(
     null;
 
 
+  /*
+   * 2005–2026 all use
+   * complete data modules.
+   */
   if (
     isFullDataYear(
       year
@@ -2088,6 +2292,14 @@ function createYearCarrier(
       );
 
 
+    /*
+     * Internal prototype Year radius
+     * = 2.0.
+     *
+     * Scale the entire hierarchy
+     * so the Year orbit matches
+     * its chronological carrier radius.
+     */
     const moduleScale =
       radius /
       YEAR_RADIUS;
@@ -2141,6 +2353,11 @@ function createYearCarrier(
     );
   }
 
+
+  /*
+   * Fallback carrier retained
+   * for future experiments.
+   */
   else {
     ring =
       createSimpleCarrierRing(
@@ -2155,6 +2372,9 @@ function createYearCarrier(
   }
 
 
+  /*
+   * Different initial Year angle.
+   */
   const initialY =
     initialYearPhase(
       yearIndex
@@ -2165,6 +2385,9 @@ function createYearCarrier(
     initialY;
 
 
+  /*
+   * Different Year rotation speed.
+   */
   const rotationSpeed =
     yearRotationSpeed(
       yearIndex
@@ -2197,7 +2420,7 @@ function createYearCarrier(
 
 
 /* =========================================================
-   BUILD ALL 22 YEAR WRAPPERS
+   BUILD ALL 22 YEARS
    ========================================================= */
 
 function buildYearCarriers() {
@@ -2273,6 +2496,11 @@ function updateMonthSystems(
 
   module.monthSystems.forEach(
     month => {
+      /*
+       * All Month positions
+       * remain evenly spaced
+       * around Year.
+       */
       const monthAngle =
         month.baseAngle +
         module.monthOrbitOffset;
@@ -2301,6 +2529,10 @@ function updateMonthSystems(
       );
 
 
+      /*
+       * Month ripple disc sits
+       * perpendicular to Year tangent.
+       */
       const monthTangent =
         new THREE.Vector3(
           -sinMonth,
@@ -2317,6 +2549,9 @@ function updateMonthSystems(
           );
 
 
+      /*
+       * Floating wobble.
+       */
       const wobbleX =
         new THREE.Quaternion()
           .setFromAxisAngle(
@@ -2360,6 +2595,9 @@ function updateMonthSystems(
         );
 
 
+      /*
+       * Daily ripple.
+       */
       month.days.forEach(
         day => {
           const amplitude =
@@ -2378,11 +2616,17 @@ function updateMonthSystems(
             );
 
 
+          /*
+           * Outer dates move slightly more.
+           */
           day.root.position.z =
             wave *
             amplitude;
 
 
+          /*
+           * Tiny breathing.
+           */
           const breathe =
             1 +
             Math.sin(
@@ -2398,6 +2642,9 @@ function updateMonthSystems(
           );
 
 
+          /*
+           * Halo shimmer.
+           */
           if (
             day.haloRing
           ) {
@@ -2419,6 +2666,9 @@ function updateMonthSystems(
           }
 
 
+          /*
+           * Larger halo shimmer.
+           */
           if (
             day.outerHaloRing
           ) {
@@ -2447,7 +2697,7 @@ function updateMonthSystems(
 
 
 /* =========================================================
-   UPDATE 2020–2026 MODULES
+   UPDATE ALL YEAR MODULES
    ========================================================= */
 
 function updateFullYearModules(
@@ -2455,6 +2705,9 @@ function updateFullYearModules(
 ) {
   fullYearModules.forEach(
     module => {
+      /*
+       * Flowing Year particles.
+       */
       module.yearFlowMaterial
         .uniforms
         .uTime
@@ -2462,6 +2715,10 @@ function updateFullYearModules(
           time;
 
 
+      /*
+       * Month modules move together
+       * around each Year orbit.
+       */
       module.monthOrbitOffset =
         time *
         0.075;
@@ -2477,7 +2734,7 @@ function updateFullYearModules(
 
 
 /* =========================================================
-   R2 YEAR WRAPPER MOTION
+   YEAR WRAPPER MOTION
    ========================================================= */
 
 function updateYearMotion(
@@ -2485,6 +2742,15 @@ function updateYearMotion(
 ) {
   yearSystems.forEach(
     system => {
+      /*
+       * Year-level motion:
+       *
+       * Y rotation only.
+       *
+       * No Year-level X wobble.
+       * No Year-level Z wobble.
+       * No translation.
+       */
       system.wrapper.rotation.x =
         0;
 
@@ -2501,6 +2767,10 @@ function updateYearMotion(
   );
 
 
+  /*
+   * Entire 22-Year motif
+   * slowly rotates around Y.
+   */
   masterMotif.rotation.x =
     0;
 
@@ -2730,11 +3000,19 @@ function animate(
     0.001;
 
 
+  /*
+   * Internal Year → Month → Day
+   * animation for all Years.
+   */
   updateFullYearModules(
     time
   );
 
 
+  /*
+   * Outer 22-Year
+   * gyroscope movement.
+   */
   updateYearMotion(
     time
   );
@@ -2778,9 +3056,12 @@ async function initialisePrototype() {
 
   createStage();
 
+
   createThreeScene();
 
+
   buildYearCarriers();
+
 
   attachInteraction();
 
@@ -2797,7 +3078,7 @@ async function initialisePrototype() {
 
 
   console.log(
-    "Thunder Rhythm 2020–2026 Annual Encoded Modules ready."
+    "Thunder Rhythm 2005–2026 Annual Encoded Modules ready."
   );
 }
 
@@ -2805,7 +3086,7 @@ async function initialisePrototype() {
 initialisePrototype()
   .catch(error => {
     console.error(
-      "2020–2026 Annual Encoded Modules error:",
+      "2005–2026 Annual Encoded Modules error:",
       error
     );
   });
