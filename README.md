@@ -271,7 +271,7 @@ After that, I developed a **2025 radial calendar**.
 
 ![2025 radial calendar prototype](out/lightning-radial-2025.png)
 
-*2025 radial calendar prototype. This version made the seasonal pattern within one year visible, but it did not scale well when I tried to compare more than one year.*
+*Radial structure experiments. I first tested a 2025 single-year calendar, then tried extending the same visual language across multiple years. The comparison showed that the single-image approach quickly became difficult to read as more years were added.*
 
 In this version, each day of the year was positioned around a circle, while the daily lightning count controlled the length of the radial bar.
 
@@ -319,9 +319,9 @@ I was particularly interested in:
 - click-based state changes
 - continuous animation
 
-I did not use these examples as direct templates for the final visualisation. Instead, they helped me understand how dynamic visual systems can be organised in the browser and how a continuously running visual can respond to user input.
+I used these examples as references for motion, interaction, and visual behaviour rather than copying a complete visualisation directly. They helped me understand how dynamic systems could be organised in the browser and how continuous animation could respond to user input.
 
-I then reworked these interaction ideas around my own lightning dataset. The data mapping, interaction states, and visual hierarchy were redesigned for the Year, Month, and Day levels, gradually developing into the current system.
+I then reworked these ideas around my own lightning dataset. The data mapping, interaction states, and visual hierarchy were redesigned for the Year, Month, and Day levels, gradually developing into the current system.
 
 The development process, including the code experiments and AI-assisted iterations, is documented in [`PROCESS.md`](PROCESS.md).
 
@@ -368,7 +368,7 @@ Clicking a Year opens the Month level.
 
 Clicking a Month with available data opens the Daily level.
 
-Months without records are not treated as zero and do not open a daily view that does not exist.
+Months without records are kept distinct from zero and cannot be opened in the Daily view.
 
 ### Drag
 
