@@ -1,37 +1,23 @@
 /* =========================================================
    THUNDER RHYTHM
-   PROTOTYPE 04-R6
+   PROTOTYPE 04-R8.2
 
-   2005–2026 FULL DATA MODULES
-   + ANNUAL YEAR ENCODING
+   2005–2026 NEON DIFFUSE FLOW
 
-   DATA HIERARCHY
+   Radius = chronology
+   Year colour = year identity
+   Overall thickness / brightness = annual lightning total
+   Local flowing energy = monthly lightning total
+   Sparse flares = strongest lightning days
+
+   VISUAL UPDATE FROM R8.1
    ---------------------------------------------------------
-
-   Year radius
-   = chronology
-   2005 inner → 2026 outer
-
-   Year orbit:
-   - thickness
-   - brightness
-   - colour
-   = annual lightning total
-
-   Month:
-   - 12 temporal modules
-   - reduced scale for multi-year readability
-
-   Day:
-   - concentric Daily rings
-   - brightness / thickness / glow
-   = Daily lightning activity
-
-   2005 and 2026 use only
-   the observations available
-   in the HKO dataset.
-
-   No missing dates are estimated.
+   - remove hard particle boundaries
+   - Gaussian luminous body
+   - wider diffuse halo
+   - flowing / breathing light clusters
+   - retain bright neon cyan / green / blue /
+     violet / pink / white palette
    ========================================================= */
 
 
@@ -42,22 +28,11 @@
 const LIGHTNING_DATA_PATH =
   "./data/daily_HK_LGTG_ALL.csv";
 
-
-const FULL_DATA_START_YEAR =
-  2005;
-
-
-const FULL_DATA_END_YEAR =
-  2026;
-
-
 const START_YEAR =
   2005;
 
-
 const END_YEAR =
   2026;
-
 
 const YEARS =
   Array.from(
@@ -73,88 +48,31 @@ const YEARS =
       index
   );
 
-
 const YEAR_COUNT =
   YEARS.length;
-
 
 const MONTH_COUNT =
   12;
 
 
-const MONTH_NAMES = [
-  "JAN",
-  "FEB",
-  "MAR",
-  "APR",
-  "MAY",
-  "JUN",
-  "JUL",
-  "AUG",
-  "SEP",
-  "OCT",
-  "NOV",
-  "DEC"
-];
-
-
 /* =========================================================
-   FULL-YEAR MODULE GEOMETRY
-   ========================================================= */
-
-const YEAR_RADIUS =
-  2.0;
-
-
-const MONTH_INNER_RADIUS =
-  0.050;
-
-
-const MONTH_OUTER_RADIUS =
-  0.42;
-
-
-/*
- * Previous value:
- * 0.62
- *
- * Current visual:
- * 60% of previous size.
- */
-const MONTH_SYSTEM_SCALE =
-  0.372;
-
-
-const RIPPLE_INNER_AMPLITUDE =
-  0.055;
-
-
-const RIPPLE_OUTER_AMPLITUDE =
-  0.135;
-
-
-/* =========================================================
-   YEAR CARRIER GEOMETRY
+   YEAR OVERVIEW GEOMETRY
    ========================================================= */
 
 const YEAR_RADIUS_MIN =
   0.52;
 
-
 const YEAR_RADIUS_MAX =
   2.82;
 
+const YEAR_PARTICLE_COUNT =
+  256;
 
-const RING_TUBE_RADIUS =
-  0.008;
+const YEAR_PHASE_OFFSET =
+  0.010;
 
-
-const RING_RADIAL_SEGMENTS =
-  6;
-
-
-const RING_TUBULAR_SEGMENTS =
-  160;
+const PEAK_FLARE_COUNT =
+  2;
 
 
 /* =========================================================
@@ -164,14 +82,11 @@ const RING_TUBULAR_SEGMENTS =
 const YEAR_SPEED_MIN =
   0.035;
 
-
 const YEAR_SPEED_MAX =
   0.075;
 
-
 const MASTER_Y_SPEED =
   0.016;
-
 
 const GOLDEN_PHASE =
   0.6180339887498949;
@@ -184,9 +99,38 @@ const GOLDEN_PHASE =
 const ORTHO_VIEW_HEIGHT =
   6.65;
 
-
 let cameraZoom =
   1.0;
+
+
+/* =========================================================
+   BRIGHT NEON YEAR IDENTITIES
+   ========================================================= */
+
+const YEAR_COLOUR_PAIRS = [
+  [0x25e8ff, 0xe9ffff],
+  [0x1fe7cf, 0xd8fff0],
+  [0x59f2b2, 0xefffd9],
+  [0x8dff59, 0xf1ffc2],
+  [0x34f1e4, 0xd8ffff],
+  [0x20d8ff, 0xe8fcff],
+  [0x289dff, 0xdeefff],
+  [0x3f72ff, 0xdde2ff],
+  [0x6558ff, 0xe9e0ff],
+  [0x8b4fff, 0xf5e0ff],
+  [0xb34dff, 0xffddff],
+  [0xe84bd5, 0xffd9f1],
+  [0xff4fb8, 0xffe1f4],
+  [0xf05adf, 0xffe2ff],
+  [0xc775ff, 0xf4e2ff],
+  [0x91a8ff, 0xeaf3ff],
+  [0x4dc7ff, 0xe0faff],
+  [0x66ff63, 0xf0ffd1],
+  [0x25e0bf, 0xd5fff0],
+  [0x33a9ff, 0xe1f4ff],
+  [0xa95cff, 0xffe0ff],
+  [0x75f1ff, 0xf5ffff]
+];
 
 
 /* =========================================================
@@ -196,67 +140,51 @@ let cameraZoom =
 let THREE =
   null;
 
-
 let renderer =
   null;
-
 
 let scene =
   null;
 
-
 let camera =
   null;
 
-
 let stage =
   null;
-
 
 let masterMotif =
   null;
 
 
-const yearSystems =
-  [];
-
-
 /* =========================================================
-   DATA MODULE STATE
+   DATA STATE
    ========================================================= */
 
 let lightningRecords =
   [];
 
-
 const recordsByYear =
   new Map();
-
 
 const annualStatsByYear =
   new Map();
 
+const monthlyStatsByYear =
+  new Map();
+
+let monthlyLogCap =
+  1;
 
 let dailyLogCap =
   1;
 
 
-const fullYearModules =
-  [];
-
-
 /* =========================================================
-   YEAR RANGE HELPER
+   YEAR SYSTEM STATE
    ========================================================= */
 
-function isFullDataYear(year) {
-  return (
-    year >=
-      FULL_DATA_START_YEAR &&
-    year <=
-      FULL_DATA_END_YEAR
-  );
-}
+const yearSystems =
+  [];
 
 
 /* =========================================================
@@ -265,7 +193,6 @@ function isFullDataYear(year) {
 
 let manualMasterY =
   0;
-
 
 const pointer = {
   down:
@@ -312,17 +239,58 @@ function lerp(
 }
 
 
-function daysInMonth(
+function daysInYear(year) {
+  return (
+    new Date(
+      Date.UTC(
+        year + 1,
+        0,
+        1
+      )
+    ) -
+    new Date(
+      Date.UTC(
+        year,
+        0,
+        1
+      )
+    )
+  ) /
+  86400000;
+}
+
+
+function dayOfYear(
   year,
-  month
+  month,
+  day
 ) {
-  return new Date(
+  const start =
     Date.UTC(
       year,
-      month,
-      0
-    )
-  ).getUTCDate();
+      0,
+      1
+    );
+
+
+  const current =
+    Date.UTC(
+      year,
+      month - 1,
+      day
+    );
+
+
+  return (
+    Math.floor(
+      (
+        current -
+        start
+      ) /
+      86400000
+    ) +
+    1
+  );
 }
 
 
@@ -362,13 +330,6 @@ function parseLightningData(text) {
 
       .filter(Boolean)
 
-      /*
-       * HKO CSV:
-       *
-       * line 1 = Chinese title
-       * line 2 = English title
-       * line 3 = headings
-       */
       .slice(3)
 
       .map(line => {
@@ -416,14 +377,16 @@ function parseLightningData(text) {
 
         Number.isFinite(
           record.value
-        )
+        ) &&
+
+        record.year >=
+          START_YEAR &&
+
+        record.year <=
+          END_YEAR
       );
 
 
-  /*
-   * Divide the complete CSV
-   * into one array per Year.
-   */
   recordsByYear.clear();
 
 
@@ -444,6 +407,7 @@ function parseLightningData(text) {
               a.month -
               b.month
             ) ||
+
             (
               a.day -
               b.day
@@ -453,83 +417,53 @@ function parseLightningData(text) {
   });
 
 
-  /*
-   * All 2005–2026 Daily values
-   * share one normalisation scale.
-   *
-   * This makes Daily intensity
-   * comparable across Years.
-   */
-  const expandedRecords =
-    lightningRecords.filter(
-      record =>
-        isFullDataYear(
-          record.year
-        )
-    );
+  calculateAnnualStats();
+
+  calculateMonthlyStats();
 
 
   dailyLogCap =
-    calculateDailyLogCap(
-      expandedRecords
+    calculateLogCap(
+      lightningRecords.map(
+        record =>
+          record.value
+      ),
+
+      0.98
     );
-
-
-  /*
-   * Calculate annual totals
-   * for Year-level encoding.
-   */
-  calculateAnnualStats();
 
 
   console.log(
-    "Shared 2005–2026 lightning records loaded:",
-    expandedRecords.length
+    "R8.2 lightning records loaded:",
+    lightningRecords.length
   );
-
-
-  YEARS.forEach(year => {
-    const records =
-      recordsByYear.get(
-        year
-      ) ||
-      [];
-
-
-    console.log(
-      `${year} records:`,
-
-      records.length,
-
-      records.length
-        ? `through ${
-            records.at(-1).month
-          }/${
-            records.at(-1).day
-          }`
-        : "no records"
-    );
-  });
 }
 
 
 /* =========================================================
-   DAILY NORMALISATION
+   NORMALISATION
    ========================================================= */
 
-function calculateDailyLogCap(records) {
+function calculateLogCap(
+  rawValues,
+  percentile
+) {
   const values =
-    records
+    rawValues
       .filter(
-        record =>
-          record.value >
+        value =>
+          Number.isFinite(
+            value
+          ) &&
+
+          value >
           0
       )
 
       .map(
-        record =>
+        value =>
           Math.log1p(
-            record.value
+            value
           )
       )
 
@@ -547,19 +481,13 @@ function calculateDailyLogCap(records) {
   }
 
 
-  /*
-   * 98th percentile prevents
-   * one extreme lightning event
-   * from visually flattening
-   * all ordinary active days.
-   */
   const index =
     Math.floor(
       (
         values.length -
         1
       ) *
-      0.98
+      percentile
     );
 
 
@@ -570,7 +498,10 @@ function calculateDailyLogCap(records) {
 }
 
 
-function normaliseLightning(value) {
+function normaliseWithCap(
+  value,
+  cap
+) {
   if (
     value <=
     0
@@ -580,8 +511,10 @@ function normaliseLightning(value) {
 
 
   return clamp(
-    Math.log1p(value) /
-      dailyLogCap,
+    Math.log1p(
+      value
+    ) /
+      cap,
 
     0,
     1
@@ -590,73 +523,78 @@ function normaliseLightning(value) {
 
 
 /* =========================================================
-   ANNUAL LIGHTNING TOTALS
+   ANNUAL TOTALS
    ========================================================= */
 
 function calculateAnnualStats() {
   annualStatsByYear.clear();
 
 
-  const stats =
-    YEARS
-      .filter(
-        isFullDataYear
-      )
-
-      .map(year => {
-        const records =
-          recordsByYear.get(
-            year
-          ) ||
-          [];
+  const rawStats =
+    YEARS.map(year => {
+      const records =
+        recordsByYear.get(
+          year
+        ) ||
+        [];
 
 
-        const total =
-          records.reduce(
-            (
-              sum,
-              record
-            ) =>
-              sum +
-              record.value,
+      const total =
+        records.reduce(
+          (
+            sum,
+            record
+          ) =>
+            sum +
+            record.value,
 
-            0
-          );
-
-
-        return {
-          year,
-
-          total,
-
-          logTotal:
-            Math.log1p(
-              total
-            )
-        };
-      });
+          0
+        );
 
 
-  const logValues =
-    stats.map(
+      return {
+        year,
+
+        total,
+
+        logTotal:
+          Math.log1p(
+            total
+          )
+      };
+    });
+
+
+  const completeStats =
+    rawStats.filter(
       stat =>
-        stat.logTotal
+        stat.year >=
+          2006 &&
+
+        stat.year <=
+          2025
     );
 
 
   const minimum =
     Math.min(
-      ...logValues
+      ...completeStats.map(
+        stat =>
+          stat.logTotal
+      )
     );
 
 
   const maximum =
     Math.max(
-      ...logValues
+      ...completeStats.map(
+        stat =>
+          stat.logTotal
+      )
     );
 
 
-  stats.forEach(
+  rawStats.forEach(
     stat => {
       const strength =
         maximum ===
@@ -686,21 +624,15 @@ function calculateAnnualStats() {
           total:
             stat.total,
 
-          strength
+          strength,
+
+          partial:
+            stat.year ===
+              2005 ||
+
+            stat.year ===
+              2026
         }
-      );
-
-
-      console.log(
-        `${stat.year} annual lightning:`,
-
-        stat.total,
-
-        "strength:",
-
-        strength.toFixed(
-          3
-        )
       );
     }
   );
@@ -708,59 +640,124 @@ function calculateAnnualStats() {
 
 
 /* =========================================================
-   SIMPLE YEAR STYLE
+   MONTHLY TOTALS
    ========================================================= */
 
-function yearColour(
-  yearIndex
-) {
-  const t =
-    yearIndex /
-    Math.max(
-      1,
-      YEAR_COUNT -
-      1
+function calculateMonthlyStats() {
+  monthlyStatsByYear.clear();
+
+
+  const allMonthlyTotals =
+    [];
+
+
+  YEARS.forEach(year => {
+    const records =
+      recordsByYear.get(
+        year
+      ) ||
+      [];
+
+
+    const totals =
+      Array.from(
+        {
+          length:
+            MONTH_COUNT
+        },
+
+        () =>
+          0
+      );
+
+
+    records.forEach(
+      record => {
+        totals[
+          record.month -
+          1
+        ] +=
+          record.value;
+      }
     );
 
 
-  const colour =
-    new THREE.Color();
+    monthlyStatsByYear.set(
+      year,
+
+      {
+        totals,
+
+        strengths:
+          []
+      }
+    );
 
 
-  const hue =
-    0.51 +
-    t *
-      0.27;
+    totals.forEach(value => {
+      if (
+        value >
+        0
+      ) {
+        allMonthlyTotals.push(
+          value
+        );
+      }
+    });
+  });
 
 
-  colour.setHSL(
-    hue,
-    0.82,
-    0.68
-  );
+  monthlyLogCap =
+    calculateLogCap(
+      allMonthlyTotals,
+      0.97
+    );
 
 
-  return colour;
+  YEARS.forEach(year => {
+    const stats =
+      monthlyStatsByYear.get(
+        year
+      );
+
+
+    stats.strengths =
+      stats.totals.map(
+        value =>
+          normaliseWithCap(
+            value,
+            monthlyLogCap
+          )
+      );
+  });
 }
 
 
-function yearOpacity(
+/* =========================================================
+   YEAR COLOUR
+   ========================================================= */
+
+function yearColours(
   yearIndex
 ) {
-  const t =
-    yearIndex /
-    Math.max(
-      1,
-      YEAR_COUNT -
-      1
-    );
+  const pair =
+    YEAR_COLOUR_PAIRS[
+      yearIndex %
+      YEAR_COLOUR_PAIRS.length
+    ];
 
 
-  return lerp(
-    0.32,
-    0.62,
-    t
-  );
+  return {
+    base:
+      new THREE.Color(
+        pair[0]
+      ),
+
+    accent:
+      new THREE.Color(
+        pair[1]
+      )
+  };
 }
 
 
@@ -791,6 +788,7 @@ function yearRotationSpeed(
     yearIndex /
     Math.max(
       1,
+
       YEAR_COUNT -
       1
     );
@@ -823,160 +821,6 @@ function yearRotationSpeed(
 
 
 /* =========================================================
-   MONTH / DAY COLOUR
-   ========================================================= */
-
-function monthColour(index) {
-  const colour =
-    new THREE.Color();
-
-
-  const t =
-    index /
-    Math.max(
-      1,
-      MONTH_COUNT -
-      1
-    );
-
-
-  /*
-   * cyan
-   * → blue
-   * → violet
-   * → magenta
-   */
-  const hue =
-    0.50 +
-    t *
-      0.32;
-
-
-  colour.setHSL(
-    hue,
-    0.92,
-    0.64
-  );
-
-
-  return colour;
-}
-
-
-function dayColour(
-  monthIndex,
-  intensity
-) {
-  const base =
-    monthColour(
-      monthIndex
-    );
-
-
-  return base.lerp(
-    new THREE.Color(
-      0xffffff
-    ),
-
-    Math.pow(
-      intensity,
-      0.75
-    ) *
-      0.64
-  );
-}
-
-
-/* =========================================================
-   DAILY DATA → STYLE
-   ========================================================= */
-
-function intensityLevel(
-  intensity
-) {
-  if (
-    intensity ===
-    0
-  ) {
-    return 0;
-  }
-
-
-  if (
-    intensity <
-    0.20
-  ) {
-    return 1;
-  }
-
-
-  if (
-    intensity <
-    0.45
-  ) {
-    return 2;
-  }
-
-
-  if (
-    intensity <
-    0.72
-  ) {
-    return 3;
-  }
-
-
-  return 4;
-}
-
-
-/*
- * Daily ring thickness.
- */
-function dayTubeRadius(level) {
-  return [
-    0.00160,
-    0.00220,
-    0.00310,
-    0.00460,
-    0.00680
-  ][level];
-}
-
-
-/*
- * Current brightness:
- * approximately 80% of
- * the earlier version.
- */
-function dayOpacity(level) {
-  return [
-    0.064,
-    0.144,
-    0.288,
-    0.528,
-    0.768
-  ][level];
-}
-
-
-/*
- * Current halo brightness:
- * approximately 80% of
- * the earlier version.
- */
-function glowOpacity(level) {
-  return [
-    0.000,
-    0.000,
-    0.028,
-    0.068,
-    0.136
-  ][level];
-}
-
-
-/* =========================================================
    PAGE
    ========================================================= */
 
@@ -996,11 +840,12 @@ function createStage() {
 
 
   stage.id =
-    "thunder-rhythm-r6";
+    "thunder-rhythm-r82";
 
 
   Object.assign(
     stage.style,
+
     {
       position:
         "fixed",
@@ -1041,10 +886,10 @@ function createStage() {
     <div style="
       font-size:10px;
       letter-spacing:.22em;
-      color:rgba(180,220,255,.55);
+      color:rgba(180,220,255,.58);
       margin-bottom:8px;
     ">
-      THUNDER RHYTHM · PROTOTYPE 04-R6
+      THUNDER RHYTHM · PROTOTYPE 04-R8.2
     </div>
 
     <div style="
@@ -1053,24 +898,29 @@ function createStage() {
       letter-spacing:-.03em;
       color:#f7f8ff;
     ">
-      2005–2026 Lightning Rhythm
+      2005–2026 Neon Diffuse Flow
     </div>
 
     <div style="
       margin-top:8px;
       font-size:11px;
-      line-height:1.65;
+      line-height:1.7;
       color:rgba(210,220,240,.55);
     ">
-      YEAR → MONTH → DAY
+      RADIUS = YEAR · COLOUR = YEAR IDENTITY
       <br>
-      YEAR LIGHT = ANNUAL LIGHTNING TOTAL
+      THICKNESS / BRIGHTNESS = ANNUAL TOTAL
+      <br>
+      FLOWING LOCAL ENERGY = MONTHLY TOTAL
+      <br>
+      2005 &amp; 2026 = PARTIAL COVERAGE
     </div>
   `;
 
 
   Object.assign(
     label.style,
+
     {
       position:
         "absolute",
@@ -1110,6 +960,7 @@ function createStage() {
 
   Object.assign(
     hint.style,
+
     {
       position:
         "absolute",
@@ -1196,8 +1047,17 @@ function createThreeScene() {
   );
 
 
+  if (
+    THREE.SRGBColorSpace
+  ) {
+    renderer.outputColorSpace =
+      THREE.SRGBColorSpace;
+  }
+
+
   Object.assign(
     renderer.domElement.style,
+
     {
       position:
         "absolute",
@@ -1252,13 +1112,6 @@ function createThreeScene() {
     new THREE.Group();
 
 
-  masterMotif.position.set(
-    0,
-    0,
-    0
-  );
-
-
   scene.add(
     masterMotif
   );
@@ -1269,103 +1122,42 @@ function createThreeScene() {
 
 
 /* =========================================================
-   SIMPLE YEAR CARRIER
+   YEAR PARTICLE GEOMETRY
    ========================================================= */
 
-function createSimpleCarrierRing(
-  yearIndex,
-  radius
-) {
+function createYearParticleGeometry() {
   const geometry =
-    new THREE.TorusGeometry(
-      radius,
+    new THREE.BufferGeometry();
 
-      RING_TUBE_RADIUS,
 
-      RING_RADIAL_SEGMENTS,
-
-      RING_TUBULAR_SEGMENTS
+  const positions =
+    new Float32Array(
+      YEAR_PARTICLE_COUNT *
+      3
     );
-
-
-  const material =
-    new THREE.MeshBasicMaterial({
-      color:
-        yearColour(
-          yearIndex
-        ),
-
-      transparent:
-        true,
-
-      opacity:
-        yearOpacity(
-          yearIndex
-        ),
-
-      side:
-        THREE.DoubleSide,
-
-      depthWrite:
-        false,
-
-      depthTest:
-        false,
-
-      blending:
-        THREE.NormalBlending
-    });
-
-
-  const ring =
-    new THREE.Mesh(
-      geometry,
-      material
-    );
-
-
-  ring.renderOrder =
-    yearIndex;
-
-
-  return ring;
-}
-
-
-/* =========================================================
-   YEAR LIGHT ORBIT
-   ========================================================= */
-
-function createYearOrbit(
-  parent,
-  yearStrength
-) {
-  /*
-   * Final visual setting:
-   *
-   * dense particles
-   * low gap
-   * relatively thin Year light
-   */
-  const PARTICLE_COUNT =
-    160;
 
 
   const phases =
     new Float32Array(
-      PARTICLE_COUNT
+      YEAR_PARTICLE_COUNT
+    );
+
+
+  const seeds =
+    new Float32Array(
+      YEAR_PARTICLE_COUNT
     );
 
 
   for (
     let i = 0;
-    i < PARTICLE_COUNT;
+    i < YEAR_PARTICLE_COUNT;
     i += 1
   ) {
     const regular =
       (
         i /
-        PARTICLE_COUNT
+        YEAR_PARTICLE_COUNT
       ) *
       Math.PI *
       2;
@@ -1376,34 +1168,38 @@ function createYearOrbit(
         i *
         12.9898
       ) *
-      0.020;
+      YEAR_PHASE_OFFSET;
 
 
     phases[i] =
       regular +
       offset;
+
+
+    seeds[i] =
+      (
+        Math.sin(
+          i *
+          78.233 +
+          19.19
+        ) +
+        1
+      ) *
+      0.5;
   }
 
 
-  const flowGeometry =
-    new THREE.BufferGeometry();
-
-
-  flowGeometry.setAttribute(
+  geometry.setAttribute(
     "position",
 
     new THREE.BufferAttribute(
-      new Float32Array(
-        PARTICLE_COUNT *
-        3
-      ),
-
+      positions,
       3
     )
   );
 
 
-  flowGeometry.setAttribute(
+  geometry.setAttribute(
     "aPhase",
 
     new THREE.BufferAttribute(
@@ -1413,8 +1209,1133 @@ function createYearOrbit(
   );
 
 
-  const yearFlowMaterial =
+  geometry.setAttribute(
+    "aSeed",
+
+    new THREE.BufferAttribute(
+      seeds,
+      1
+    )
+  );
+
+
+  return geometry;
+}
+
+
+/* =========================================================
+   MONTH UNIFORMS
+   ========================================================= */
+
+function createMonthUniforms(
+  monthlyStrengths
+) {
+  const uniforms =
+    {};
+
+
+  for (
+    let i = 0;
+    i < MONTH_COUNT;
+    i += 1
+  ) {
+    uniforms[
+      `uMonth${i}`
+    ] = {
+      value:
+        monthlyStrengths[i] ||
+        0
+    };
+  }
+
+
+  return uniforms;
+}
+
+
+/* =========================================================
+   MONTHLY ENERGY FIELD GLSL
+   ========================================================= */
+
+const MONTH_FIELD_GLSL = `
+
+  uniform float uMonth0;
+  uniform float uMonth1;
+  uniform float uMonth2;
+  uniform float uMonth3;
+  uniform float uMonth4;
+  uniform float uMonth5;
+  uniform float uMonth6;
+  uniform float uMonth7;
+  uniform float uMonth8;
+  uniform float uMonth9;
+  uniform float uMonth10;
+  uniform float uMonth11;
+
+
+  float circularDistance(
+    float a,
+    float b
+  ) {
+
+    float d =
+      abs(
+        a -
+        b
+      );
+
+
+    return min(
+      d,
+      1.0 -
+      d
+    );
+  }
+
+
+  float monthWeight(
+    float t,
+    float centre
+  ) {
+
+    float d =
+      circularDistance(
+        t,
+        centre
+      );
+
+
+    return 1.0 -
+      smoothstep(
+        0.035,
+        0.115,
+        d
+      );
+  }
+
+
+  float getMonthField(
+    float angle
+  ) {
+
+    float tau =
+      6.28318530718;
+
+
+    float t =
+      fract(
+        angle /
+        tau
+      );
+
+
+    float sum =
+      0.0;
+
+
+    float totalWeight =
+      0.0;
+
+
+    float w0 = monthWeight(t, 0.0416667);
+    float w1 = monthWeight(t, 0.1250000);
+    float w2 = monthWeight(t, 0.2083333);
+    float w3 = monthWeight(t, 0.2916667);
+    float w4 = monthWeight(t, 0.3750000);
+    float w5 = monthWeight(t, 0.4583333);
+    float w6 = monthWeight(t, 0.5416667);
+    float w7 = monthWeight(t, 0.6250000);
+    float w8 = monthWeight(t, 0.7083333);
+    float w9 = monthWeight(t, 0.7916667);
+    float w10 = monthWeight(t, 0.8750000);
+    float w11 = monthWeight(t, 0.9583333);
+
+
+    sum += uMonth0 * w0;
+    sum += uMonth1 * w1;
+    sum += uMonth2 * w2;
+    sum += uMonth3 * w3;
+    sum += uMonth4 * w4;
+    sum += uMonth5 * w5;
+    sum += uMonth6 * w6;
+    sum += uMonth7 * w7;
+    sum += uMonth8 * w8;
+    sum += uMonth9 * w9;
+    sum += uMonth10 * w10;
+    sum += uMonth11 * w11;
+
+
+    totalWeight += w0;
+    totalWeight += w1;
+    totalWeight += w2;
+    totalWeight += w3;
+    totalWeight += w4;
+    totalWeight += w5;
+    totalWeight += w6;
+    totalWeight += w7;
+    totalWeight += w8;
+    totalWeight += w9;
+    totalWeight += w10;
+    totalWeight += w11;
+
+
+    return sum /
+      max(
+        totalWeight,
+        0.0001
+      );
+  }
+
+`;
+
+
+/* =========================================================
+   SHARED FLOW FIELD
+   ========================================================= */
+
+const FLOW_FIELD_GLSL = `
+
+  float getFlow(
+    float angle,
+    float time,
+    float seed
+  ) {
+
+    float pulseA =
+      0.5 +
+      0.5 *
+      sin(
+        angle *
+          5.0 -
+        time *
+          1.60 +
+        seed *
+          1.9
+      );
+
+
+    float pulseB =
+      0.5 +
+      0.5 *
+      sin(
+        angle *
+          11.0 +
+        time *
+          0.82 +
+        seed *
+          3.7
+      );
+
+
+    float travel =
+      0.5 +
+      0.5 *
+      sin(
+        angle *
+          3.0 -
+        time *
+          2.15
+      );
+
+
+    return
+      0.13 +
+
+      pow(
+        pulseA,
+        7.0
+      ) *
+        0.44 +
+
+      pow(
+        pulseB,
+        10.0
+      ) *
+        0.28 +
+
+      pow(
+        travel,
+        9.0
+      ) *
+        0.55;
+  }
+
+`;
+
+
+/* =========================================================
+   YEAR SOFT BODY MATERIAL
+   ========================================================= */
+
+function createYearCoreMaterial(
+  radius,
+  annualStrength,
+  monthlyStrengths,
+  baseColour,
+  accentColour
+) {
+  return new THREE.ShaderMaterial({
+
+    uniforms: {
+      uTime: {
+        value:
+          0
+      },
+
+      uRadius: {
+        value:
+          radius
+      },
+
+      uAnnualStrength: {
+        value:
+          annualStrength
+      },
+
+      uBaseColour: {
+        value:
+          baseColour
+      },
+
+      uAccentColour: {
+        value:
+          accentColour
+      },
+
+      ...createMonthUniforms(
+        monthlyStrengths
+      )
+    },
+
+
+    vertexShader: `
+
+      uniform float uTime;
+      uniform float uRadius;
+      uniform float uAnnualStrength;
+
+      attribute float aPhase;
+      attribute float aSeed;
+
+      varying float vMonthly;
+      varying float vFlow;
+      varying float vHot;
+
+
+      ${MONTH_FIELD_GLSL}
+
+      ${FLOW_FIELD_GLSL}
+
+
+      void main() {
+
+        float angle =
+          aPhase +
+
+          uTime *
+            0.205 +
+
+          sin(
+            uTime *
+              0.46 +
+            aSeed *
+              6.2831853
+          ) *
+            0.012;
+
+
+        float monthly =
+          getMonthField(
+            angle
+          );
+
+
+        float flow =
+          getFlow(
+            angle,
+            uTime,
+            aSeed
+          );
+
+
+        float hot =
+          clamp(
+            monthly *
+              0.54 +
+            flow *
+              0.66,
+
+            0.0,
+            1.4
+          );
+
+
+        vec3 p =
+          vec3(
+            cos(angle) *
+              uRadius,
+
+            sin(angle) *
+              uRadius,
+
+            0.0
+          );
+
+
+        vec4 mvPosition =
+          modelViewMatrix *
+          vec4(
+            p,
+            1.0
+          );
+
+
+        float annualThickness =
+          mix(
+            0.82,
+            1.10,
+            uAnnualStrength
+          );
+
+
+        float monthlyThickness =
+          mix(
+            0.80,
+            1.18,
+            monthly
+          );
+
+
+        float flowExpansion =
+          mix(
+            0.90,
+            1.20,
+            smoothstep(
+              0.38,
+              1.10,
+              hot
+            )
+          );
+
+
+        gl_PointSize =
+          (
+            0.34 +
+            monthly *
+              0.34 +
+            flow *
+              0.28
+          ) *
+
+          annualThickness *
+          monthlyThickness *
+          flowExpansion *
+
+          (
+            145.0 /
+            -mvPosition.z
+          );
+
+
+        gl_Position =
+          projectionMatrix *
+          mvPosition;
+
+
+        vMonthly =
+          monthly;
+
+
+        vFlow =
+          flow;
+
+
+        vHot =
+          hot;
+      }
+
+    `,
+
+
+    fragmentShader: `
+
+      precision highp float;
+
+      uniform float uAnnualStrength;
+
+      uniform vec3 uBaseColour;
+      uniform vec3 uAccentColour;
+
+      varying float vMonthly;
+      varying float vFlow;
+      varying float vHot;
+
+
+      void main() {
+
+        vec2 p =
+          gl_PointCoord -
+          vec2(0.5);
+
+
+        float d =
+          length(p);
+
+
+        /*
+         * Gaussian luminous body.
+         *
+         * No visible circular edge.
+         */
+        float softBody =
+          exp(
+            -d *
+            d *
+            10.5
+          );
+
+
+        /*
+         * Wider low-density body.
+         */
+        float outerBody =
+          exp(
+            -d *
+            d *
+            5.8
+          );
+
+
+        /*
+         * Tiny hot centre.
+         *
+         * Still soft — not a solid disc.
+         */
+        float innerGlow =
+          exp(
+            -d *
+            d *
+            32.0
+          );
+
+
+        float colourMix =
+          clamp(
+            0.14 +
+            vMonthly *
+              0.40 +
+            vFlow *
+              0.30,
+
+            0.0,
+            1.0
+          );
+
+
+        vec3 colour =
+          mix(
+            uBaseColour,
+            uAccentColour,
+            colourMix
+          );
+
+
+        float hotAmount =
+          smoothstep(
+            0.50,
+            1.18,
+            vHot
+          );
+
+
+        colour =
+          mix(
+            colour,
+            vec3(1.0),
+
+            innerGlow *
+            hotAmount *
+              0.62
+          );
+
+
+        float annualBrightness =
+          mix(
+            0.78,
+            1.00,
+            uAnnualStrength
+          );
+
+
+        float localBrightness =
+          0.68 +
+          vMonthly *
+            0.20 +
+          vFlow *
+            0.25;
+
+
+        colour *=
+          annualBrightness *
+          localBrightness;
+
+
+        /*
+         * Soft luminous body.
+         *
+         * There is no hard silhouette.
+         */
+        float alpha =
+          outerBody *
+          (
+            0.08 +
+            vMonthly *
+              0.045 +
+            vFlow *
+              0.065
+          ) +
+
+          softBody *
+          (
+            0.14 +
+            vMonthly *
+              0.08 +
+            vFlow *
+              0.12
+          ) +
+
+          innerGlow *
+          hotAmount *
+            0.16;
+
+
+        if (
+          alpha <
+          0.006
+        ) {
+          discard;
+        }
+
+
+        gl_FragColor =
+          vec4(
+            colour,
+            alpha
+          );
+      }
+
+    `,
+
+
+    transparent:
+      true,
+
+    depthWrite:
+      false,
+
+    depthTest:
+      true,
+
+    blending:
+      THREE.NormalBlending
+  });
+}
+
+
+/* =========================================================
+   YEAR DIFFUSE HALO MATERIAL
+   ========================================================= */
+
+function createYearHaloMaterial(
+  radius,
+  annualStrength,
+  monthlyStrengths,
+  baseColour,
+  accentColour
+) {
+  return new THREE.ShaderMaterial({
+
+    uniforms: {
+      uTime: {
+        value:
+          0
+      },
+
+      uRadius: {
+        value:
+          radius
+      },
+
+      uAnnualStrength: {
+        value:
+          annualStrength
+      },
+
+      uBaseColour: {
+        value:
+          baseColour
+      },
+
+      uAccentColour: {
+        value:
+          accentColour
+      },
+
+      ...createMonthUniforms(
+        monthlyStrengths
+      )
+    },
+
+
+    vertexShader: `
+
+      uniform float uTime;
+      uniform float uRadius;
+      uniform float uAnnualStrength;
+
+      attribute float aPhase;
+      attribute float aSeed;
+
+      varying float vMonthly;
+      varying float vFlow;
+      varying float vGlowHot;
+
+
+      ${MONTH_FIELD_GLSL}
+
+      ${FLOW_FIELD_GLSL}
+
+
+      void main() {
+
+        float angle =
+          aPhase +
+
+          uTime *
+            0.205 +
+
+          sin(
+            uTime *
+              0.46 +
+            aSeed *
+              6.2831853
+          ) *
+            0.012;
+
+
+        float monthly =
+          getMonthField(
+            angle
+          );
+
+
+        float flow =
+          getFlow(
+            angle,
+            uTime,
+            aSeed
+          );
+
+
+        float glowHot =
+          smoothstep(
+            0.42,
+            1.02,
+
+            flow +
+            monthly *
+              0.42
+          );
+
+
+        vec3 p =
+          vec3(
+            cos(angle) *
+              uRadius,
+
+            sin(angle) *
+              uRadius,
+
+            0.0
+          );
+
+
+        vec4 mvPosition =
+          modelViewMatrix *
+          vec4(
+            p,
+            1.0
+          );
+
+
+        float annualThickness =
+          mix(
+            0.82,
+            1.12,
+            uAnnualStrength
+          );
+
+
+        float monthlyThickness =
+          mix(
+            0.82,
+            1.22,
+            monthly
+          );
+
+
+        /*
+         * Bright flow clusters expand
+         * into soft luminous clouds.
+         */
+        float clusterExpansion =
+          mix(
+            0.82,
+            1.68,
+            glowHot
+          );
+
+
+        gl_PointSize =
+          (
+            0.90 +
+            monthly *
+              0.70 +
+            flow *
+              0.80
+          ) *
+
+          annualThickness *
+          monthlyThickness *
+          clusterExpansion *
+
+          (
+            145.0 /
+            -mvPosition.z
+          );
+
+
+        gl_Position =
+          projectionMatrix *
+          mvPosition;
+
+
+        vMonthly =
+          monthly;
+
+
+        vFlow =
+          flow;
+
+
+        vGlowHot =
+          glowHot;
+      }
+
+    `,
+
+
+    fragmentShader: `
+
+      precision highp float;
+
+      uniform float uAnnualStrength;
+
+      uniform vec3 uBaseColour;
+      uniform vec3 uAccentColour;
+
+      varying float vMonthly;
+      varying float vFlow;
+      varying float vGlowHot;
+
+
+      void main() {
+
+        vec2 p =
+          gl_PointCoord -
+          vec2(0.5);
+
+
+        float d =
+          length(p);
+
+
+        /*
+         * Main diffuse glow.
+         */
+        float diffuseGlow =
+          exp(
+            -d *
+            d *
+            4.2
+          );
+
+
+        /*
+         * Very wide atmospheric bloom.
+         */
+        float wideGlow =
+          exp(
+            -d *
+            d *
+            1.85
+          );
+
+
+        /*
+         * Slightly concentrated centre,
+         * but still completely soft.
+         */
+        float centralGlow =
+          exp(
+            -d *
+            d *
+            12.0
+          );
+
+
+        float colourMix =
+          clamp(
+            0.18 +
+            vMonthly *
+              0.42 +
+            vFlow *
+              0.34,
+
+            0.0,
+            1.0
+          );
+
+
+        vec3 colour =
+          mix(
+            uBaseColour,
+            uAccentColour,
+            colourMix
+          );
+
+
+        colour =
+          mix(
+            colour,
+            vec3(1.0),
+
+            centralGlow *
+            vGlowHot *
+              0.18
+          );
+
+
+        /*
+         * Most particles produce only
+         * a subtle haze.
+         *
+         * Strong travelling pulses are
+         * allowed to bloom.
+         */
+        float alpha =
+          diffuseGlow *
+          (
+            0.0018 +
+            vMonthly *
+              0.0045 +
+            vFlow *
+              0.0065 +
+            vGlowHot *
+              0.034
+          ) +
+
+          wideGlow *
+          vGlowHot *
+            0.009 +
+
+          centralGlow *
+          vGlowHot *
+            0.010;
+
+
+        alpha *=
+          0.80 +
+          uAnnualStrength *
+            0.20;
+
+
+        if (
+          alpha <
+          0.001
+        ) {
+          discard;
+        }
+
+
+        gl_FragColor =
+          vec4(
+            colour,
+            alpha
+          );
+      }
+
+    `,
+
+
+    transparent:
+      true,
+
+    depthWrite:
+      false,
+
+    depthTest:
+      true,
+
+    blending:
+      THREE.AdditiveBlending
+  });
+}
+
+
+/* =========================================================
+   PEAK-DAY FLARES
+   ========================================================= */
+
+function createPeakFlares(
+  parent,
+  year,
+  radius,
+  baseColour,
+  accentColour
+) {
+  const records =
+    recordsByYear.get(
+      year
+    ) ||
+    [];
+
+
+  const peaks =
+    [...records]
+
+      .filter(
+        record =>
+          record.value >
+          0
+      )
+
+      .sort(
+        (a, b) =>
+          b.value -
+          a.value
+      )
+
+      .slice(
+        0,
+        PEAK_FLARE_COUNT
+      );
+
+
+  if (
+    !peaks.length
+  ) {
+    return null;
+  }
+
+
+  const positions =
+    new Float32Array(
+      peaks.length *
+      3
+    );
+
+
+  const phases =
+    new Float32Array(
+      peaks.length
+    );
+
+
+  const strengths =
+    new Float32Array(
+      peaks.length
+    );
+
+
+  const yearDays =
+    daysInYear(
+      year
+    );
+
+
+  peaks.forEach(
+    (
+      record,
+      index
+    ) => {
+
+      const doy =
+        dayOfYear(
+          year,
+          record.month,
+          record.day
+        );
+
+
+      phases[index] =
+        (
+          (
+            doy -
+            1
+          ) /
+          yearDays
+        ) *
+        Math.PI *
+        2;
+
+
+      strengths[index] =
+        normaliseWithCap(
+          record.value,
+          dailyLogCap
+        );
+    }
+  );
+
+
+  const geometry =
+    new THREE.BufferGeometry();
+
+
+  geometry.setAttribute(
+    "position",
+
+    new THREE.BufferAttribute(
+      positions,
+      3
+    )
+  );
+
+
+  geometry.setAttribute(
+    "aPhase",
+
+    new THREE.BufferAttribute(
+      phases,
+      1
+    )
+  );
+
+
+  geometry.setAttribute(
+    "aStrength",
+
+    new THREE.BufferAttribute(
+      strengths,
+      1
+    )
+  );
+
+
+  const material =
     new THREE.ShaderMaterial({
+
       uniforms: {
         uTime: {
           value:
@@ -1423,31 +2344,50 @@ function createYearOrbit(
 
         uRadius: {
           value:
-            YEAR_RADIUS
+            radius
         },
 
-        uYearStrength: {
+        uBaseColour: {
           value:
-            yearStrength
+            baseColour
+        },
+
+        uAccentColour: {
+          value:
+            accentColour
         }
       },
 
 
       vertexShader: `
+
         uniform float uTime;
         uniform float uRadius;
-        uniform float uYearStrength;
 
         attribute float aPhase;
+        attribute float aStrength;
 
-        varying float vBrightness;
+        varying float vStrength;
+        varying float vPulse;
 
 
         void main() {
 
           float angle =
             aPhase +
-            uTime * 0.34;
+            uTime *
+              0.205;
+
+
+          float pulse =
+            0.5 +
+            0.5 *
+            sin(
+              uTime *
+                2.25 +
+              aPhase *
+                9.0
+            );
 
 
           vec3 p =
@@ -1462,40 +2402,6 @@ function createYearOrbit(
             );
 
 
-          float pulseA =
-            0.5 +
-            0.5 *
-            sin(
-              angle * 5.0 -
-              uTime * 1.4
-            );
-
-
-          float pulseB =
-            0.5 +
-            0.5 *
-            sin(
-              angle * 11.0 +
-              uTime * 0.8
-            );
-
-
-          vBrightness =
-            0.24 +
-
-            pow(
-              pulseA,
-              7.0
-            ) *
-              0.58 +
-
-            pow(
-              pulseB,
-              10.0
-            ) *
-              0.38;
-
-
           vec4 mvPosition =
             modelViewMatrix *
             vec4(
@@ -1504,33 +2410,16 @@ function createYearOrbit(
             );
 
 
-          /*
-           * Annual lightning controls
-           * Year-orbit thickness.
-           *
-           * Lowest Year:
-           * 72% of maximum thickness.
-           *
-           * Highest Year:
-           * current tested maximum.
-           */
-          float yearThickness =
-            mix(
-              0.72,
-              1.00,
-              uYearStrength
-            );
-
-
           gl_PointSize =
             (
-              1.20 +
-              vBrightness *
-                2.40
+              0.92 +
+              aStrength *
+                1.30 +
+              pulse *
+                0.55
             ) *
-            yearThickness *
             (
-              220.0 /
+              145.0 /
               -mvPosition.z
             );
 
@@ -1538,16 +2427,28 @@ function createYearOrbit(
           gl_Position =
             projectionMatrix *
             mvPosition;
+
+
+          vStrength =
+            aStrength;
+
+
+          vPulse =
+            pulse;
         }
+
       `,
 
 
       fragmentShader: `
+
         precision highp float;
 
-        uniform float uYearStrength;
+        uniform vec3 uBaseColour;
+        uniform vec3 uAccentColour;
 
-        varying float vBrightness;
+        varying float vStrength;
+        varying float vPulse;
 
 
         void main() {
@@ -1561,154 +2462,76 @@ function createYearOrbit(
             length(p);
 
 
-          float alpha =
-            1.0 -
-            smoothstep(
-              0.08,
-              0.50,
-              d
+          float brightGlow =
+            exp(
+              -d *
+              d *
+              13.0
             );
 
 
-          float core =
-            1.0 -
-            smoothstep(
-              0.0,
-              0.15,
-              d
+          float diffuseGlow =
+            exp(
+              -d *
+              d *
+              4.0
             );
 
 
-          vec3 cyan =
-            vec3(
-              0.30,
-              0.92,
-              1.00
-            );
-
-
-          vec3 violet =
-            vec3(
-              0.83,
-              0.30,
-              1.00
+          float wideGlow =
+            exp(
+              -d *
+              d *
+              1.8
             );
 
 
           vec3 colour =
             mix(
-              cyan,
-              violet,
-
-              vBrightness *
-                0.52
-            );
-
-
-          /*
-           * Annual total also changes
-           * colour direction.
-           *
-           * Lower total:
-           * cyan / blue.
-           *
-           * Higher total:
-           * violet / white.
-           */
-          vec3 lowYearColour =
-            vec3(
-              0.24,
-              0.82,
-              1.00
-            );
-
-
-          vec3 highYearColour =
-            vec3(
-              0.88,
-              0.42,
-              1.00
-            );
-
-
-          vec3 annualTint =
-            mix(
-              lowYearColour,
-              highYearColour,
-              uYearStrength
-            );
-
-
-          colour =
-            mix(
-              colour,
-              annualTint,
-              0.22
-            );
-
-
-          colour =
-            mix(
-              colour,
+              uAccentColour,
               vec3(1.0),
 
-              core *
-              vBrightness *
-              (
-                0.46 +
-                uYearStrength *
-                  0.18
-              )
+              0.38 +
+              vStrength *
+                0.42
             );
 
 
-          /*
-           * Keep alpha intact.
-           *
-           * Earlier tests showed
-           * reducing alpha caused
-           * the Year orbit to disappear.
-           */
-          alpha *=
-            0.20 +
-            vBrightness *
-              0.82;
+          float alpha =
+            brightGlow *
+              (
+                0.30 +
+                vStrength *
+                  0.26
+              ) +
+
+            diffuseGlow *
+              (
+                0.018 +
+                vPulse *
+                  0.035
+              ) +
+
+            wideGlow *
+              vPulse *
+                0.010;
 
 
           if (
             alpha <
-            0.006
+            0.002
           ) {
             discard;
           }
 
 
-          /*
-           * Annual total controls
-           * Year brightness.
-           *
-           * Lowest Year:
-           * 0.58
-           *
-           * Highest Year:
-           * 0.80
-           */
-          float annualBrightness =
-            mix(
-              0.58,
-              0.80,
-              uYearStrength
-            );
-
-
           gl_FragColor =
             vec4(
-              colour *
-                annualBrightness,
-
+              colour,
               alpha
             );
         }
+
       `,
 
 
@@ -1726,500 +2549,31 @@ function createYearOrbit(
     });
 
 
-  const flowPoints =
+  const points =
     new THREE.Points(
-      flowGeometry,
-      yearFlowMaterial
+      geometry,
+      material
     );
 
 
-  flowPoints.frustumCulled =
+  points.frustumCulled =
     false;
 
 
   parent.add(
-    flowPoints
+    points
   );
 
 
-  return yearFlowMaterial;
+  return material;
 }
 
 
 /* =========================================================
-   MONTH SYSTEMS
+   BUILD ONE YEAR RHYTHM
    ========================================================= */
 
-function createMonthSystems(
-  parent,
-  year,
-  yearRecords
-) {
-  const monthSystems =
-    [];
-
-
-  for (
-    let monthIndex = 0;
-    monthIndex < MONTH_COUNT;
-    monthIndex += 1
-  ) {
-    const monthNumber =
-      monthIndex +
-      1;
-
-
-    const calendarDays =
-      daysInMonth(
-        year,
-        monthNumber
-      );
-
-
-    /*
-     * Important:
-     *
-     * Partial Years such as 2005
-     * and 2026 only contain Month
-     * records that truly exist.
-     *
-     * Missing Months are not filled.
-     */
-    const monthRecords =
-      yearRecords.filter(
-        record =>
-          record.month ===
-          monthNumber
-      );
-
-
-    const monthRoot =
-      new THREE.Group();
-
-
-    monthRoot.rotation.z =
-      monthIndex *
-      0.09;
-
-
-    monthRoot.scale.setScalar(
-      MONTH_SYSTEM_SCALE
-    );
-
-
-    const days =
-      [];
-
-
-    monthRecords.forEach(
-      record => {
-        const intensity =
-          normaliseLightning(
-            record.value
-          );
-
-
-        const level =
-          intensityLevel(
-            intensity
-          );
-
-
-        /*
-         * Day chronology becomes radius.
-         *
-         * Day 01 = inner ring.
-         * Final calendar date = outer ring.
-         */
-        const radialT =
-          (
-            record.day -
-            1
-          ) /
-          Math.max(
-            1,
-
-            calendarDays -
-            1
-          );
-
-
-        const ringRadius =
-          lerp(
-            MONTH_INNER_RADIUS,
-            MONTH_OUTER_RADIUS,
-            radialT
-          );
-
-
-        const colourDay =
-          dayColour(
-            monthIndex,
-            intensity
-          );
-
-
-        const dayRoot =
-          new THREE.Group();
-
-
-        /*
-         * Core Daily ring.
-         */
-        const geometry =
-          new THREE.TorusGeometry(
-            ringRadius,
-
-            dayTubeRadius(
-              level
-            ),
-
-            7,
-            64
-          );
-
-
-        const material =
-          new THREE.MeshBasicMaterial({
-            color:
-              colourDay,
-
-            transparent:
-              true,
-
-            opacity:
-              dayOpacity(
-                level
-              ),
-
-            blending:
-              level >=
-              3
-                ? THREE.AdditiveBlending
-                : THREE.NormalBlending,
-
-            depthWrite:
-              false,
-
-            depthTest:
-              true
-          });
-
-
-        const ring =
-          new THREE.Mesh(
-            geometry,
-            material
-          );
-
-
-        dayRoot.add(
-          ring
-        );
-
-
-        /*
-         * Diffuse halo.
-         */
-        let haloRing =
-          null;
-
-
-        if (
-          level >=
-          2
-        ) {
-          const haloGeometry =
-            new THREE.TorusGeometry(
-              ringRadius,
-
-              dayTubeRadius(
-                level
-              ) *
-                3.2,
-
-              7,
-              64
-            );
-
-
-          haloRing =
-            new THREE.Mesh(
-              haloGeometry,
-
-              new THREE.MeshBasicMaterial({
-                color:
-                  colourDay,
-
-                transparent:
-                  true,
-
-                opacity:
-                  glowOpacity(
-                    level
-                  ),
-
-                blending:
-                  THREE.AdditiveBlending,
-
-                depthWrite:
-                  false,
-
-                depthTest:
-                  true
-              })
-            );
-
-
-          dayRoot.add(
-            haloRing
-          );
-        }
-
-
-        /*
-         * Secondary outer halo.
-         */
-        let outerHaloRing =
-          null;
-
-
-        if (
-          level >=
-          3
-        ) {
-          const outerHaloGeometry =
-            new THREE.TorusGeometry(
-              ringRadius,
-
-              dayTubeRadius(
-                level
-              ) *
-                5.5,
-
-              7,
-              64
-            );
-
-
-          outerHaloRing =
-            new THREE.Mesh(
-              outerHaloGeometry,
-
-              new THREE.MeshBasicMaterial({
-                color:
-                  colourDay,
-
-                transparent:
-                  true,
-
-                opacity:
-                  level ===
-                  4
-                    ? 0.036
-                    : 0.018,
-
-                blending:
-                  THREE.AdditiveBlending,
-
-                depthWrite:
-                  false,
-
-                depthTest:
-                  true
-              })
-            );
-
-
-          dayRoot.add(
-            outerHaloRing
-          );
-        }
-
-
-        monthRoot.add(
-          dayRoot
-        );
-
-
-        days.push({
-          day:
-            record.day,
-
-          value:
-            record.value,
-
-          intensity,
-
-          level,
-
-          radialT,
-
-          ringRadius,
-
-          root:
-            dayRoot,
-
-          ring,
-
-          haloRing,
-
-          outerHaloRing,
-
-          /*
-           * Day-dependent animation phase.
-           */
-          phase:
-            record.day *
-              0.43 +
-            monthIndex *
-              0.71
-        });
-      }
-    );
-
-
-    parent.add(
-      monthRoot
-    );
-
-
-    monthSystems.push({
-      index:
-        monthIndex,
-
-      month:
-        monthNumber,
-
-      name:
-        MONTH_NAMES[
-          monthIndex
-        ],
-
-      root:
-        monthRoot,
-
-      days,
-
-      calendarDays,
-
-      baseAngle:
-        (
-          monthIndex /
-          MONTH_COUNT
-        ) *
-        Math.PI *
-        2,
-
-      wobblePhase:
-        monthIndex *
-        0.63
-    });
-  }
-
-
-  console.log(
-    `${year} concentric hierarchy:`,
-
-    monthSystems.length,
-
-    "months ·",
-
-    monthSystems.reduce(
-      (
-        total,
-        month
-      ) =>
-        total +
-        month.days.length,
-
-      0
-    ),
-
-    "daily concentric rings"
-  );
-
-
-  return monthSystems;
-}
-
-
-/* =========================================================
-   BUILD ONE COMPLETE YEAR MODULE
-   ========================================================= */
-
-function buildFullYearModule(
-  year,
-  yearRecords
-) {
-  const root =
-    new THREE.Group();
-
-
-  const annualStats =
-    annualStatsByYear.get(
-      year
-    ) ||
-    {
-      total:
-        0,
-
-      strength:
-        0
-    };
-
-
-  /*
-   * Year light receives
-   * annual normalised strength.
-   */
-  const yearFlowMaterial =
-    createYearOrbit(
-      root,
-      annualStats.strength
-    );
-
-
-  /*
-   * Build 12 Month positions.
-   *
-   * Only available Daily records
-   * generate rings.
-   */
-  const monthSystems =
-    createMonthSystems(
-      root,
-      year,
-      yearRecords
-    );
-
-
-  return {
-    year,
-
-    root,
-
-    yearFlowMaterial,
-
-    monthSystems,
-
-    annualTotal:
-      annualStats.total,
-
-    annualStrength:
-      annualStats.strength,
-
-    monthOrbitOffset:
-      0
-  };
-}
-
-
-/* =========================================================
-   CREATE ONE YEAR WRAPPER
-   ========================================================= */
-
-function createYearCarrier(
+function createYearRhythm(
   year,
   yearIndex
 ) {
@@ -2232,12 +2586,6 @@ function createYearCarrier(
     );
 
 
-  /*
-   * Chronological radius:
-   *
-   * 2005 smallest
-   * 2026 largest
-   */
   const radius =
     lerp(
       YEAR_RADIUS_MIN,
@@ -2246,152 +2594,153 @@ function createYearCarrier(
     );
 
 
+  const annualStats =
+    annualStatsByYear.get(
+      year
+    ) ||
+    {
+      total:
+        0,
+
+      strength:
+        0,
+
+      partial:
+        false
+    };
+
+
+  const monthlyStats =
+    monthlyStatsByYear.get(
+      year
+    ) ||
+    {
+      totals:
+        Array(
+          MONTH_COUNT
+        ).fill(
+          0
+        ),
+
+      strengths:
+        Array(
+          MONTH_COUNT
+        ).fill(
+          0
+        )
+    };
+
+
+  const colours =
+    yearColours(
+      yearIndex
+    );
+
+
   const wrapper =
     new THREE.Group();
 
 
+  const geometry =
+    createYearParticleGeometry();
+
+
   /*
-   * Every Year shares
-   * exactly the same centre.
+   * Diffuse atmospheric halo.
    */
-  wrapper.position.set(
-    0,
-    0,
-    0
+  const haloMaterial =
+    createYearHaloMaterial(
+      radius,
+      annualStats.strength,
+      monthlyStats.strengths,
+      colours.base,
+      colours.accent
+    );
+
+
+  const haloPoints =
+    new THREE.Points(
+      geometry,
+      haloMaterial
+    );
+
+
+  haloPoints.frustumCulled =
+    false;
+
+
+  haloPoints.renderOrder =
+    yearIndex *
+    3;
+
+
+  wrapper.add(
+    haloPoints
   );
 
 
-  let ring =
-    null;
+  /*
+   * Soft luminous body.
+   */
+  const coreMaterial =
+    createYearCoreMaterial(
+      radius,
+      annualStats.strength,
+      monthlyStats.strengths,
+      colours.base,
+      colours.accent
+    );
 
 
-  let module =
-    null;
+  const corePoints =
+    new THREE.Points(
+      geometry,
+      coreMaterial
+    );
+
+
+  corePoints.frustumCulled =
+    false;
+
+
+  corePoints.renderOrder =
+    yearIndex *
+      3 +
+    1;
+
+
+  wrapper.add(
+    corePoints
+  );
 
 
   /*
-   * 2005–2026 all use
-   * complete data modules.
+   * Sparse strongest Daily events.
    */
-  if (
-    isFullDataYear(
-      year
-    )
-  ) {
-    const yearRecords =
-      recordsByYear.get(
-        year
-      ) ||
-      [];
-
-
-    module =
-      buildFullYearModule(
-        year,
-        yearRecords
-      );
-
-
-    /*
-     * Internal prototype Year radius
-     * = 2.0.
-     *
-     * Scale the entire hierarchy
-     * so the Year orbit matches
-     * its chronological carrier radius.
-     */
-    const moduleScale =
-      radius /
-      YEAR_RADIUS;
-
-
-    module.root.scale.setScalar(
-      moduleScale
+  const flareMaterial =
+    createPeakFlares(
+      wrapper,
+      year,
+      radius,
+      colours.base,
+      colours.accent
     );
 
 
-    wrapper.add(
-      module.root
-    );
-
-
-    module.scale =
-      moduleScale;
-
-
-    module.targetRadius =
-      radius;
-
-
-    fullYearModules.push(
-      module
-    );
-
-
-    console.log(
-      `${year} module scale:`,
-
-      moduleScale.toFixed(
-        4
-      ),
-
-      "target radius:",
-
-      radius.toFixed(
-        4
-      ),
-
-      "annual total:",
-
-      module.annualTotal,
-
-      "annual strength:",
-
-      module.annualStrength.toFixed(
-        3
-      )
-    );
-  }
-
-
-  /*
-   * Fallback carrier retained
-   * for future experiments.
-   */
-  else {
-    ring =
-      createSimpleCarrierRing(
-        yearIndex,
-        radius
-      );
-
-
-    wrapper.add(
-      ring
-    );
-  }
-
-
-  /*
-   * Different initial Year angle.
-   */
   const initialY =
     initialYearPhase(
       yearIndex
     );
 
 
-  wrapper.rotation.y =
-    initialY;
-
-
-  /*
-   * Different Year rotation speed.
-   */
   const rotationSpeed =
     yearRotationSpeed(
       yearIndex
     );
+
+
+  wrapper.rotation.y =
+    initialY;
 
 
   masterMotif.add(
@@ -2408,9 +2757,26 @@ function createYearCarrier(
 
     wrapper,
 
-    ring,
+    annualTotal:
+      annualStats.total,
 
-    module,
+    annualStrength:
+      annualStats.strength,
+
+    partial:
+      annualStats.partial,
+
+    monthlyTotals:
+      monthlyStats.totals,
+
+    monthlyStrengths:
+      monthlyStats.strengths,
+
+    coreMaterial,
+
+    haloMaterial,
+
+    flareMaterial,
 
     initialY,
 
@@ -2423,13 +2789,14 @@ function createYearCarrier(
    BUILD ALL 22 YEARS
    ========================================================= */
 
-function buildYearCarriers() {
+function buildYearRhythms() {
   YEARS.forEach(
     (
       year,
       yearIndex
     ) => {
-      createYearCarrier(
+
+      createYearRhythm(
         year,
         yearIndex
       );
@@ -2438,319 +2805,53 @@ function buildYearCarriers() {
 
 
   console.log(
-    "Year wrappers built:",
+    "R8.2 Neon Diffuse Year Rhythms built:",
     yearSystems.length
   );
 
 
   console.log(
-    "Shared centre:",
-    "(0, 0, 0)"
-  );
-
-
-  console.log(
-    "Chronological radius:",
+    "Chronology:",
     "2005 inner → 2026 outer"
   );
-
-
-  console.log(
-    "Expanded Years:",
-    `${FULL_DATA_START_YEAR}–${FULL_DATA_END_YEAR}`
-  );
 }
 
 
 /* =========================================================
-   MONTH + DAILY RIPPLE MOTION
+   UPDATE
    ========================================================= */
 
-function updateMonthSystems(
-  module,
+function updateYearRhythms(
   time
 ) {
-  const xAxis =
-    new THREE.Vector3(
-      1,
-      0,
-      0
-    );
+  yearSystems.forEach(
+    system => {
 
-
-  const yAxis =
-    new THREE.Vector3(
-      0,
-      1,
-      0
-    );
-
-
-  const zAxis =
-    new THREE.Vector3(
-      0,
-      0,
-      1
-    );
-
-
-  module.monthSystems.forEach(
-    month => {
-      /*
-       * All Month positions
-       * remain evenly spaced
-       * around Year.
-       */
-      const monthAngle =
-        month.baseAngle +
-        module.monthOrbitOffset;
-
-
-      const cosMonth =
-        Math.cos(
-          monthAngle
-        );
-
-
-      const sinMonth =
-        Math.sin(
-          monthAngle
-        );
-
-
-      month.root.position.set(
-        cosMonth *
-          YEAR_RADIUS,
-
-        sinMonth *
-          YEAR_RADIUS,
-
-        0
-      );
-
-
-      /*
-       * Month ripple disc sits
-       * perpendicular to Year tangent.
-       */
-      const monthTangent =
-        new THREE.Vector3(
-          -sinMonth,
-          cosMonth,
-          0
-        ).normalize();
-
-
-      const alignment =
-        new THREE.Quaternion()
-          .setFromUnitVectors(
-            zAxis,
-            monthTangent
-          );
-
-
-      /*
-       * Floating wobble.
-       */
-      const wobbleX =
-        new THREE.Quaternion()
-          .setFromAxisAngle(
-            xAxis,
-
-            Math.sin(
-              time *
-                0.36 +
-              month.wobblePhase
-            ) *
-              0.13
-          );
-
-
-      const wobbleY =
-        new THREE.Quaternion()
-          .setFromAxisAngle(
-            yAxis,
-
-            Math.cos(
-              time *
-                0.29 +
-              month.wobblePhase *
-                1.3
-            ) *
-              0.085
-          );
-
-
-      month.root.quaternion
-        .copy(
-          alignment
-        )
-
-        .multiply(
-          wobbleX
-        )
-
-        .multiply(
-          wobbleY
-        );
-
-
-      /*
-       * Daily ripple.
-       */
-      month.days.forEach(
-        day => {
-          const amplitude =
-            lerp(
-              RIPPLE_INNER_AMPLITUDE,
-              RIPPLE_OUTER_AMPLITUDE,
-              day.radialT
-            );
-
-
-          const wave =
-            Math.sin(
-              time *
-                1.55 +
-              day.phase
-            );
-
-
-          /*
-           * Outer dates move slightly more.
-           */
-          day.root.position.z =
-            wave *
-            amplitude;
-
-
-          /*
-           * Tiny breathing.
-           */
-          const breathe =
-            1 +
-            Math.sin(
-              time *
-                0.47 +
-              day.phase
-            ) *
-              0.006;
-
-
-          day.root.scale.setScalar(
-            breathe
-          );
-
-
-          /*
-           * Halo shimmer.
-           */
-          if (
-            day.haloRing
-          ) {
-            const haloPulse =
-              1 +
-              Math.sin(
-                time *
-                  0.82 +
-                day.phase
-              ) *
-                0.026;
-
-
-            day.haloRing
-              .scale
-              .setScalar(
-                haloPulse
-              );
-          }
-
-
-          /*
-           * Larger halo shimmer.
-           */
-          if (
-            day.outerHaloRing
-          ) {
-            const outerPulse =
-              1 +
-              Math.sin(
-                time *
-                  0.63 +
-                day.phase +
-                0.7
-              ) *
-                0.035;
-
-
-            day.outerHaloRing
-              .scale
-              .setScalar(
-                outerPulse
-              );
-          }
-        }
-      );
-    }
-  );
-}
-
-
-/* =========================================================
-   UPDATE ALL YEAR MODULES
-   ========================================================= */
-
-function updateFullYearModules(
-  time
-) {
-  fullYearModules.forEach(
-    module => {
-      /*
-       * Flowing Year particles.
-       */
-      module.yearFlowMaterial
+      system.coreMaterial
         .uniforms
         .uTime
         .value =
           time;
 
 
-      /*
-       * Month modules move together
-       * around each Year orbit.
-       */
-      module.monthOrbitOffset =
-        time *
-        0.075;
+      system.haloMaterial
+        .uniforms
+        .uTime
+        .value =
+          time;
 
 
-      updateMonthSystems(
-        module,
-        time
-      );
-    }
-  );
-}
+      if (
+        system.flareMaterial
+      ) {
+        system.flareMaterial
+          .uniforms
+          .uTime
+          .value =
+            time;
+      }
 
 
-/* =========================================================
-   YEAR WRAPPER MOTION
-   ========================================================= */
-
-function updateYearMotion(
-  time
-) {
-  yearSystems.forEach(
-    system => {
-      /*
-       * Year-level motion:
-       *
-       * Y rotation only.
-       *
-       * No Year-level X wobble.
-       * No Year-level Z wobble.
-       * No translation.
-       */
       system.wrapper.rotation.x =
         0;
 
@@ -2767,10 +2868,6 @@ function updateYearMotion(
   );
 
 
-  /*
-   * Entire 22-Year motif
-   * slowly rotates around Y.
-   */
   masterMotif.rotation.x =
     0;
 
@@ -2795,6 +2892,7 @@ function attachInteraction() {
     "pointerdown",
 
     event => {
+
       pointer.down =
         true;
 
@@ -2818,6 +2916,7 @@ function attachInteraction() {
     "pointermove",
 
     event => {
+
       if (
         !pointer.down
       ) {
@@ -2843,6 +2942,7 @@ function attachInteraction() {
 
   const endPointer =
     () => {
+
       pointer.down =
         false;
 
@@ -2868,6 +2968,7 @@ function attachInteraction() {
     "wheel",
 
     event => {
+
       event.preventDefault();
 
 
@@ -2898,10 +2999,11 @@ function attachInteraction() {
 
 
 /* =========================================================
-   ORTHOGRAPHIC CAMERA
+   CAMERA
    ========================================================= */
 
 function updateOrthographicCamera() {
+
   if (
     !camera
   ) {
@@ -2964,6 +3066,7 @@ function updateOrthographicCamera() {
    ========================================================= */
 
 function resize() {
+
   if (
     !renderer ||
     !camera
@@ -2990,6 +3093,7 @@ function resize() {
 function animate(
   timestamp
 ) {
+
   requestAnimationFrame(
     animate
   );
@@ -3000,20 +3104,7 @@ function animate(
     0.001;
 
 
-  /*
-   * Internal Year → Month → Day
-   * animation for all Years.
-   */
-  updateFullYearModules(
-    time
-  );
-
-
-  /*
-   * Outer 22-Year
-   * gyroscope movement.
-   */
-  updateYearMotion(
+  updateYearRhythms(
     time
   );
 
@@ -3030,14 +3121,17 @@ function animate(
    ========================================================= */
 
 async function initialisePrototype() {
+
   const [
     threeModule,
     csvText
   ] =
     await Promise.all([
+
       import(
         "https://cdn.jsdelivr.net/npm/three@0.180.0/+esm"
       ),
+
 
       loadText(
         LIGHTNING_DATA_PATH
@@ -3060,7 +3154,7 @@ async function initialisePrototype() {
   createThreeScene();
 
 
-  buildYearCarriers();
+  buildYearRhythms();
 
 
   attachInteraction();
@@ -3078,15 +3172,16 @@ async function initialisePrototype() {
 
 
   console.log(
-    "Thunder Rhythm 2005–2026 Annual Encoded Modules ready."
+    "Thunder Rhythm R8.2 Neon Diffuse Flow ready."
   );
 }
 
 
 initialisePrototype()
   .catch(error => {
+
     console.error(
-      "2005–2026 Annual Encoded Modules error:",
+      "R8.2 Neon Diffuse Flow error:",
       error
     );
   });
