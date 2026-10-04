@@ -3440,6 +3440,11 @@ function createYearCoreMaterial(
 
       },
 
+    uDetailScale: {
+      value:
+        1.0
+    },
+
 
 
       uBaseColour: {
@@ -3483,6 +3488,7 @@ function createYearCoreMaterial(
       uniform float uRadius;
 
       uniform float uAnnualStrength;
+    uniform float uDetailScale;
 
 
 
@@ -3726,7 +3732,7 @@ function createYearCoreMaterial(
 
             -mvPosition.z
 
-          );
+          ) * uDetailScale;
 
 
 
@@ -4198,6 +4204,11 @@ function createYearHaloMaterial(
 
       },
 
+    uDetailScale: {
+      value:
+        1.0
+    },
+
 
 
       uBaseColour: {
@@ -4241,6 +4252,7 @@ function createYearHaloMaterial(
       uniform float uRadius;
 
       uniform float uAnnualStrength;
+    uniform float uDetailScale;
 
 
 
@@ -4482,7 +4494,7 @@ function createYearHaloMaterial(
 
             -mvPosition.z
 
-          );
+          ) * uDetailScale;
 
 
 
@@ -6140,6 +6152,2970 @@ function createYearRhythm(
 
 
 
+
+/* =========================================================
+   2025 YEAR DETAIL · PROTOTYPE 03.1 MONTH RIPPLE SYSTEMS
+
+   TEST ONLY 2025 BEFORE GENERALISING TO EVERY YEAR
+
+   Structure:
+   selected 2025 Year orbit
+        ↓
+   12 Month modules
+        ↓
+   each Month = 28–31 concentric Daily rings
+
+   Day 01 = innermost ring
+   Last day = outermost ring
+
+   Visual behaviour preserved from Prototype 03.1:
+   - month circulation around Year
+   - tangent-aligned Month planes
+   - daily ripple depth
+   - breathing
+   - diffuse glow
+
+   Colour adapted to current 2025 Year identity:
+   bright gold → pale yellow → white-hot peak
+   ========================================================= */
+
+const YEAR_DETAIL_2025_RADIUS =
+  2.0;
+
+const YEAR_DETAIL_MONTH_INNER_RADIUS =
+  0.050;
+
+const YEAR_DETAIL_MONTH_OUTER_RADIUS =
+  0.42;
+
+const YEAR_DETAIL_RIPPLE_INNER_AMPLITUDE =
+  0.055;
+
+const YEAR_DETAIL_RIPPLE_OUTER_AMPLITUDE =
+  0.135;
+
+
+const YEAR_DETAIL_MONTH_NAMES = [
+  "JAN",
+  "FEB",
+  "MAR",
+  "APR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AUG",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DEC"
+];
+
+
+let yearDetail2025Group =
+  null;
+
+let yearDetail2025System =
+  null;
+
+let yearDetail2025MonthOrbitOffset =
+  0;
+
+const yearDetail2025MonthSystems =
+  [];
+
+
+/* =========================================================
+   THUNDER_2025_LEVEL3_V2
+
+   LEVEL 2
+   YEAR → MONTH
+
+   LEVEL 3
+   MONTH → DAY
+   ========================================================= */
+
+let selectedMonth =
+  null;
+
+let hoveredMonth =
+  null;
+
+let hoveredDay =
+  null;
+
+
+/*
+ * Manual rotation is added
+ * on top of automatic motion.
+ */
+let yearDetailManualYaw =
+  0;
+
+let yearDetailManualPitch =
+  0;
+
+
+/*
+ * Level 3 state.
+ */
+let monthDetail2025Group =
+  null;
+
+let monthDetail2025State =
+  null;
+
+const monthDetail2025DayHitTargets =
+  [];
+
+
+/* =========================================================
+   DETAIL ROTATION
+
+   The selected Year ring and its
+   12 Month modules must rotate
+   as one hierarchy.
+   ========================================================= */
+
+function sync2025DetailRotation(
+  time
+) {
+
+  /*
+   * Stop the old Overview master
+   * rotation in both detail modes.
+   */
+  if (
+    selectedYear ===
+      2025 &&
+    (
+      viewMode ===
+        "year" ||
+      viewMode ===
+        "month"
+    )
+  ) {
+
+    masterMotif.rotation.x =
+      0;
+
+    masterMotif.rotation.y =
+      0;
+
+    masterMotif.rotation.z =
+      0;
+
+  }
+
+
+  if (
+    viewMode !==
+      "year" ||
+    selectedYear !==
+      2025
+  ) {
+    return;
+  }
+
+
+  const rotationX =
+    0.70 +
+    yearDetailManualPitch +
+
+    Math.sin(
+      time *
+        0.12
+    ) *
+      0.10;
+
+
+  const rotationY =
+    -0.30 +
+    yearDetailManualYaw +
+
+    time *
+      0.087;
+
+
+  const rotationZ =
+    0.12 +
+
+    Math.cos(
+      time *
+        0.09
+    ) *
+      0.075;
+
+
+  if (
+    yearDetail2025System
+  ) {
+
+    yearDetail2025System
+      .wrapper
+      .rotation
+      .set(
+
+        rotationX,
+        rotationY,
+        rotationZ
+
+      );
+
+  }
+
+
+  if (
+    yearDetail2025Group
+  ) {
+
+    yearDetail2025Group
+      .rotation
+      .set(
+
+        rotationX,
+        rotationY,
+        rotationZ
+
+      );
+
+  }
+
+}
+
+
+/* =========================================================
+   GENERIC DETAIL RAYCAST
+   ========================================================= */
+
+function detailObjectAtPointer(
+  event,
+  targets
+) {
+
+  if (
+    !raycaster ||
+    !pointerNdc ||
+    !renderer ||
+    !camera ||
+    !targets ||
+    !targets.length
+  ) {
+    return null;
+  }
+
+
+  const rect =
+    renderer
+      .domElement
+      .getBoundingClientRect();
+
+
+  pointerNdc.x =
+    (
+      (
+        event.clientX -
+        rect.left
+      ) /
+      Math.max(
+        1,
+        rect.width
+      )
+    ) *
+      2 -
+    1;
+
+
+  pointerNdc.y =
+    -(
+      (
+        event.clientY -
+        rect.top
+      ) /
+      Math.max(
+        1,
+        rect.height
+      )
+    ) *
+      2 +
+    1;
+
+
+  scene.updateMatrixWorld(
+    true
+  );
+
+
+  raycaster.setFromCamera(
+    pointerNdc,
+    camera
+  );
+
+
+  const hits =
+    raycaster.intersectObjects(
+      targets,
+      false
+    );
+
+
+  if (
+    !hits.length
+  ) {
+    return null;
+  }
+
+
+  return hits[0].object;
+
+}
+
+
+/* =========================================================
+   MONTH / DAY TOOLTIP
+   ========================================================= */
+
+function showDetailTooltip(
+  event,
+  kicker,
+  title,
+  dataLabel,
+  value
+) {
+
+  if (
+    !hoverTooltip
+  ) {
+    return;
+  }
+
+
+  hoverTooltip.innerHTML = `
+    <div style="
+      font-size:8px;
+      letter-spacing:.16em;
+      color:rgba(220,225,240,.46);
+      margin-bottom:5px;
+    ">
+      ${kicker}
+    </div>
+
+    <div style="
+      font-size:19px;
+      font-weight:600;
+      letter-spacing:-.02em;
+      color:#fffcef;
+      margin-bottom:9px;
+    ">
+      ${title}
+    </div>
+
+    <div style="
+      font-size:8px;
+      letter-spacing:.14em;
+      color:rgba(220,225,240,.48);
+      margin-bottom:3px;
+    ">
+      ${dataLabel}
+    </div>
+
+    <div style="
+      font-size:14px;
+      font-weight:600;
+      color:#ffe56c;
+      font-variant-numeric:tabular-nums;
+    ">
+      ${formatLightningCount(
+        value
+      )}
+    </div>
+  `;
+
+
+  hoverTooltip.style.opacity =
+    "1";
+
+  hoverTooltip.style.transform =
+    "translateY(0)";
+
+
+  const tooltipWidth =
+    175;
+
+  const tooltipHeight =
+    110;
+
+
+  let left =
+    event.clientX +
+    18;
+
+
+  let top =
+    event.clientY +
+    14;
+
+
+  if (
+    left +
+    tooltipWidth >
+    window.innerWidth -
+      10
+  ) {
+
+    left =
+      event.clientX -
+      tooltipWidth -
+      18;
+
+  }
+
+
+  if (
+    top +
+    tooltipHeight >
+    window.innerHeight -
+      10
+  ) {
+
+    top =
+      event.clientY -
+      tooltipHeight -
+      12;
+
+  }
+
+
+  hoverTooltip.style.left =
+    `${Math.max(
+      10,
+      left
+    )}px`;
+
+
+  hoverTooltip.style.top =
+    `${Math.max(
+      10,
+      top
+    )}px`;
+
+}
+
+
+/* =========================================================
+   LEVEL 2 MONTH HIT TEST
+   ========================================================= */
+
+function monthAtPointer(
+  event
+) {
+
+  if (
+    viewMode !==
+      "year" ||
+    selectedYear !==
+      2025
+  ) {
+    return null;
+  }
+
+
+  const targets =
+    yearDetail2025MonthSystems
+
+      .map(
+        month =>
+          month.hitTarget
+      )
+
+      .filter(Boolean);
+
+
+  const target =
+    detailObjectAtPointer(
+      event,
+      targets
+    );
+
+
+  if (
+    !target
+  ) {
+    return null;
+  }
+
+
+  const monthNumber =
+    target.userData
+      .month;
+
+
+  return (
+    yearDetail2025MonthSystems
+      .find(
+        month =>
+          month.month ===
+          monthNumber
+      ) ||
+    null
+  );
+
+}
+
+
+function updateMonthHover(
+  event
+) {
+
+  if (
+    viewMode !==
+      "year" ||
+    selectedYear !==
+      2025 ||
+    pointer.down
+  ) {
+
+    hideYearTooltip();
+
+    return;
+  }
+
+
+  const month =
+    monthAtPointer(
+      event
+    );
+
+
+  if (
+    !month
+  ) {
+
+    hoveredMonth =
+      null;
+
+
+    hideYearTooltip();
+
+
+    stage.style.cursor =
+      "grab";
+
+
+    return;
+
+  }
+
+
+  hoveredMonth =
+    month.month;
+
+
+  const stats =
+    monthlyStatsByYear.get(
+      2025
+    );
+
+
+  const value =
+    stats
+      ?.totals[
+        month.month -
+        1
+      ] ||
+    0;
+
+
+  showDetailTooltip(
+    event,
+
+    "MONTH",
+
+    `${month.name} 2025`,
+
+    "MONTHLY LIGHTNING",
+
+    value
+  );
+
+
+  stage.style.cursor =
+    "pointer";
+
+}
+
+
+/* =========================================================
+   LEVEL 3 DAY HIT TEST
+   ========================================================= */
+
+function dayAtPointer(
+  event
+) {
+
+  if (
+    viewMode !==
+      "month" ||
+    selectedYear !==
+      2025
+  ) {
+    return null;
+  }
+
+
+  const target =
+    detailObjectAtPointer(
+      event,
+      monthDetail2025DayHitTargets
+    );
+
+
+  if (
+    !target
+  ) {
+    return null;
+  }
+
+
+  return (
+    target.userData
+      .dayData ||
+    null
+  );
+
+}
+
+
+function updateDayHover(
+  event
+) {
+
+  if (
+    viewMode !==
+      "month" ||
+    selectedYear !==
+      2025
+  ) {
+
+    hideYearTooltip();
+
+    return;
+  }
+
+
+  const day =
+    dayAtPointer(
+      event
+    );
+
+
+  if (
+    !day
+  ) {
+
+    hoveredDay =
+      null;
+
+
+    hideYearTooltip();
+
+
+    stage.style.cursor =
+      "default";
+
+
+    return;
+
+  }
+
+
+  hoveredDay =
+    day.day;
+
+
+  const monthName =
+    YEAR_DETAIL_MONTH_NAMES[
+      selectedMonth -
+      1
+    ];
+
+
+  const dayLabel =
+    String(
+      day.day
+    ).padStart(
+      2,
+      "0"
+    );
+
+
+  showDetailTooltip(
+    event,
+
+    "DAY",
+
+    `${dayLabel} ${monthName} 2025`,
+
+    "DAILY LIGHTNING",
+
+    day.value
+  );
+
+
+  stage.style.cursor =
+    "pointer";
+
+}
+
+
+/* =========================================================
+   LEVEL 3 LEFT PANEL
+   ========================================================= */
+
+function render2025MonthDetailPanel(
+  monthNumber
+) {
+
+  if (
+    !detailPanel
+  ) {
+    return;
+  }
+
+
+  const monthName =
+    YEAR_DETAIL_MONTH_NAMES[
+      monthNumber -
+      1
+    ];
+
+
+  const records =
+    (
+      recordsByYear.get(
+        2025
+      ) ||
+      []
+    )
+
+      .filter(
+        record =>
+          record.month ===
+          monthNumber
+      );
+
+
+  const total =
+    records.reduce(
+      (
+        sum,
+        record
+      ) =>
+        sum +
+        record.value,
+
+      0
+    );
+
+
+  const rows =
+    records
+
+      .map(
+        record => {
+
+          const day =
+            String(
+              record.day
+            ).padStart(
+              2,
+              "0"
+            );
+
+
+          return `
+            <div style="
+              display:flex;
+              justify-content:space-between;
+              gap:12px;
+              padding:4px 0;
+              border-bottom:
+                1px solid
+                rgba(255,255,255,.045);
+              font-size:9px;
+              font-variant-numeric:
+                tabular-nums;
+            ">
+
+              <span style="
+                color:
+                  rgba(220,225,240,.52);
+              ">
+                ${day}
+              </span>
+
+              <span style="
+                color:
+                  rgba(255,244,195,.88);
+              ">
+                ${formatLightningCount(
+                  record.value
+                )}
+              </span>
+
+            </div>
+          `;
+
+        }
+      )
+
+      .join("");
+
+
+  detailPanel.innerHTML = `
+    <div style="
+      display:flex;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:13px;
+      margin-bottom:15px;
+    ">
+
+      <button
+        id="thunder-back-year-2025"
+        style="
+          appearance:none;
+          border:0;
+          background:none;
+          padding:0;
+          color:
+            rgba(235,238,250,.72);
+          font:inherit;
+          font-size:9px;
+          letter-spacing:.12em;
+          cursor:pointer;
+        "
+      >
+        ← 2025 YEAR
+      </button>
+
+
+      <button
+        id="thunder-back-all-years"
+        style="
+          appearance:none;
+          border:0;
+          background:none;
+          padding:0;
+          color:
+            rgba(235,238,250,.40);
+          font:inherit;
+          font-size:8px;
+          letter-spacing:.10em;
+          cursor:pointer;
+        "
+      >
+        ALL YEARS
+      </button>
+
+    </div>
+
+
+    <div style="
+      font-size:9px;
+      letter-spacing:.15em;
+      color:rgba(220,225,240,.43);
+      margin-bottom:5px;
+    ">
+      SELECTED MONTH
+    </div>
+
+
+    <div style="
+      font-size:25px;
+      font-weight:600;
+      letter-spacing:-.03em;
+      color:#f9f9ff;
+      margin-bottom:16px;
+    ">
+      ${monthName} 2025
+    </div>
+
+
+    <div style="
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      font-size:9px;
+      margin-bottom:4px;
+    ">
+
+      <span style="
+        color:rgba(220,225,240,.52);
+        letter-spacing:.10em;
+      ">
+        MONTHLY TOTAL
+      </span>
+
+      <span style="
+        color:#ffe56c;
+        font-weight:600;
+        font-variant-numeric:tabular-nums;
+      ">
+        ${formatLightningCount(
+          total
+        )}
+      </span>
+
+    </div>
+
+
+    <div style="
+      font-size:8px;
+      letter-spacing:.10em;
+      color:rgba(220,225,240,.38);
+      margin-bottom:13px;
+    ">
+      DAILY LIGHTNING COUNTS
+    </div>
+
+
+    <div style="
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      column-gap:18px;
+    ">
+      ${rows}
+    </div>
+  `;
+
+
+  detailPanel
+    .querySelector(
+      "#thunder-back-year-2025"
+    )
+    ?.addEventListener(
+      "click",
+
+      event => {
+
+        event.stopPropagation();
+
+        exit2025MonthView();
+
+      }
+    );
+
+
+  detailPanel
+    .querySelector(
+      "#thunder-back-all-years"
+    )
+    ?.addEventListener(
+      "click",
+
+      event => {
+
+        event.stopPropagation();
+
+        clear2025MonthDetail();
+
+        exitYearView();
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   CREATE ONE LARGE MONTH VISUALISATION
+   ========================================================= */
+
+function clear2025MonthDetail() {
+
+  if (
+    monthDetail2025Group
+  ) {
+
+    masterMotif.remove(
+      monthDetail2025Group
+    );
+
+
+    disposeYearDetailObject(
+      monthDetail2025Group
+    );
+
+  }
+
+
+  monthDetail2025Group =
+    null;
+
+
+  monthDetail2025State =
+    null;
+
+
+  monthDetail2025DayHitTargets
+    .length =
+      0;
+
+}
+
+
+function create2025MonthDetail(
+  monthNumber
+) {
+
+  clear2025MonthDetail();
+
+
+  const allRecords =
+    recordsByYear.get(
+      2025
+    ) ||
+    [];
+
+
+  const records =
+    allRecords.filter(
+      record =>
+        record.month ===
+        monthNumber
+    );
+
+
+  const calendarDays =
+    yearDetailDaysInMonth(
+      2025,
+      monthNumber
+    );
+
+
+  const localDailyLogCap =
+    calculateYearDetailDailyLogCap(
+      allRecords
+    );
+
+
+  monthDetail2025Group =
+    new THREE.Group();
+
+
+  /*
+   * Large angled Month plane.
+   */
+  monthDetail2025Group
+    .rotation
+    .set(
+      0.78,
+      -0.24,
+      0.10
+    );
+
+
+  monthDetail2025Group
+    .position
+    .x =
+      0.28;
+
+
+  masterMotif.add(
+    monthDetail2025Group
+  );
+
+
+  const days =
+    [];
+
+
+  records.forEach(
+    record => {
+
+      const intensity =
+        normaliseYearDetailLightning(
+          record.value,
+          localDailyLogCap
+        );
+
+
+      const level =
+        yearDetailIntensityLevel(
+          intensity
+        );
+
+
+      /*
+       * Calendar date controls radius.
+       */
+      const radialT =
+        (
+          record.day -
+          1
+        ) /
+        Math.max(
+          1,
+          calendarDays -
+          1
+        );
+
+
+      /*
+       * Much larger than Level 2.
+       */
+      const ringRadius =
+        lerp(
+          0.20,
+          2.03,
+          radialT
+        );
+
+
+      const colourDay =
+        yearDetail2025Colour(
+          monthNumber -
+            1,
+          intensity
+        );
+
+
+      const dayRoot =
+        new THREE.Group();
+
+
+      const ring =
+        new THREE.Mesh(
+
+          new THREE.TorusGeometry(
+
+            ringRadius,
+
+            yearDetailDayTubeRadius(
+              level
+            ) *
+              1.60,
+
+            8,
+            128
+
+          ),
+
+          new THREE.MeshBasicMaterial({
+
+            color:
+              colourDay,
+
+            transparent:
+              true,
+
+            opacity:
+              yearDetailDayOpacity(
+                level
+              ),
+
+            blending:
+              level >=
+                3
+
+                ? THREE.AdditiveBlending
+
+                : THREE.NormalBlending,
+
+            depthWrite:
+              false,
+
+            depthTest:
+              true
+
+          })
+
+        );
+
+
+      dayRoot.add(
+        ring
+      );
+
+
+      let haloRing =
+        null;
+
+
+      if (
+        level >=
+        2
+      ) {
+
+        haloRing =
+          new THREE.Mesh(
+
+            new THREE.TorusGeometry(
+
+              ringRadius,
+
+              yearDetailDayTubeRadius(
+                level
+              ) *
+                4.2,
+
+              8,
+              128
+
+            ),
+
+            new THREE.MeshBasicMaterial({
+
+              color:
+                colourDay,
+
+              transparent:
+                true,
+
+              opacity:
+                yearDetailGlowOpacity(
+                  level
+                ) *
+                  1.10,
+
+              blending:
+                THREE.AdditiveBlending,
+
+              depthWrite:
+                false,
+
+              depthTest:
+                true
+
+            })
+
+          );
+
+
+        dayRoot.add(
+          haloRing
+        );
+
+      }
+
+
+      let outerHaloRing =
+        null;
+
+
+      if (
+        level >=
+        3
+      ) {
+
+        outerHaloRing =
+          new THREE.Mesh(
+
+            new THREE.TorusGeometry(
+
+              ringRadius,
+
+              yearDetailDayTubeRadius(
+                level
+              ) *
+                7.0,
+
+              8,
+              128
+
+            ),
+
+            new THREE.MeshBasicMaterial({
+
+              color:
+                colourDay,
+
+              transparent:
+                true,
+
+              opacity:
+                level ===
+                  4
+
+                  ? 0.050
+
+                  : 0.024,
+
+              blending:
+                THREE.AdditiveBlending,
+
+              depthWrite:
+                false,
+
+              depthTest:
+                true
+
+            })
+
+          );
+
+
+        dayRoot.add(
+          outerHaloRing
+        );
+
+      }
+
+
+      /*
+       * Invisible thicker Daily ring
+       * for easy hover detection.
+       */
+      const hitTarget =
+        new THREE.Mesh(
+
+          new THREE.TorusGeometry(
+
+            ringRadius,
+
+            0.027,
+
+            6,
+            128
+
+          ),
+
+          new THREE.MeshBasicMaterial({
+
+            transparent:
+              true,
+
+            opacity:
+              0.001,
+
+            depthWrite:
+              false,
+
+            depthTest:
+              false
+
+          })
+
+        );
+
+
+      const dayData = {
+
+        day:
+          record.day,
+
+        value:
+          record.value,
+
+        intensity,
+
+        level,
+
+        radialT,
+
+        ringRadius,
+
+        root:
+          dayRoot,
+
+        ring,
+
+        haloRing,
+
+        outerHaloRing,
+
+        hitTarget,
+
+        phase:
+          record.day *
+            0.43 +
+
+          (
+            monthNumber -
+            1
+          ) *
+            0.71
+
+      };
+
+
+      hitTarget.userData = {
+
+        kind:
+          "day",
+
+        dayData
+
+      };
+
+
+      dayRoot.add(
+        hitTarget
+      );
+
+
+      monthDetail2025DayHitTargets
+        .push(
+          hitTarget
+        );
+
+
+      monthDetail2025Group.add(
+        dayRoot
+      );
+
+
+      days.push(
+        dayData
+      );
+
+    }
+  );
+
+
+  monthDetail2025State = {
+
+    month:
+      monthNumber,
+
+    calendarDays,
+
+    days
+
+  };
+
+}
+
+
+/* =========================================================
+   LEVEL 3 MONTH MOTION
+   ========================================================= */
+
+function update2025MonthDetail(
+  time
+) {
+
+  if (
+    viewMode !==
+      "month" ||
+    selectedYear !==
+      2025 ||
+    !monthDetail2025Group ||
+    !monthDetail2025State
+  ) {
+    return;
+  }
+
+
+  monthDetail2025State
+    .days
+    .forEach(
+      day => {
+
+        const amplitude =
+          lerp(
+            0.035,
+            0.145,
+            day.radialT
+          );
+
+
+        const wave =
+          Math.sin(
+
+            time *
+              1.42 +
+
+            day.phase
+
+          );
+
+
+        day.root.position.z =
+          wave *
+          amplitude;
+
+
+        const breathe =
+          1 +
+
+          Math.sin(
+
+            time *
+              0.45 +
+
+            day.phase
+
+          ) *
+            0.005;
+
+
+        day.root.scale.setScalar(
+          breathe
+        );
+
+
+        if (
+          day.haloRing
+        ) {
+
+          day.haloRing
+            .scale
+            .setScalar(
+
+              1 +
+
+              Math.sin(
+
+                time *
+                  0.80 +
+
+                day.phase
+
+              ) *
+                0.024
+
+            );
+
+        }
+
+
+        if (
+          day.outerHaloRing
+        ) {
+
+          day.outerHaloRing
+            .scale
+            .setScalar(
+
+              1 +
+
+              Math.sin(
+
+                time *
+                  0.62 +
+
+                day.phase +
+                0.7
+
+              ) *
+                0.032
+
+            );
+
+        }
+
+      }
+    );
+
+
+  /*
+   * Very subtle floating angle.
+   */
+  monthDetail2025Group
+    .rotation
+    .y =
+      -0.24 +
+
+      Math.sin(
+        time *
+          0.16
+      ) *
+        0.055;
+
+
+  monthDetail2025Group
+    .rotation
+    .z =
+      0.10 +
+
+      Math.cos(
+        time *
+          0.13
+      ) *
+        0.030;
+
+}
+
+
+/* =========================================================
+   ENTER / EXIT LEVEL 3
+   ========================================================= */
+
+function enter2025MonthView(
+  monthNumber
+) {
+
+  if (
+    selectedYear !==
+      2025
+  ) {
+    return;
+  }
+
+
+  selectedMonth =
+    monthNumber;
+
+
+  hoveredMonth =
+    null;
+
+
+  hoveredDay =
+    null;
+
+
+  hideYearTooltip();
+
+
+  viewMode =
+    "month";
+
+
+  yearSystems.forEach(
+    system => {
+
+      if (
+        system.year ===
+        2025
+      ) {
+
+        system.wrapper.visible =
+          false;
+
+      }
+
+    }
+  );
+
+
+  if (
+    yearDetail2025Group
+  ) {
+
+    yearDetail2025Group.visible =
+      false;
+
+  }
+
+
+  create2025MonthDetail(
+    monthNumber
+  );
+
+
+  render2025MonthDetailPanel(
+    monthNumber
+  );
+
+
+  interactionHint.textContent =
+    "MONTH DETAIL · HOVER A DAILY RING";
+
+
+  updateThunderMonthChart(
+    2025,
+    monthNumber
+  );
+
+
+  showThunderBackButton(
+    "month"
+  );
+
+
+  stage.style.cursor =
+    "default";
+
+}
+
+
+function exit2025MonthView() {
+
+  clear2025MonthDetail();
+
+
+  selectedMonth =
+    null;
+
+
+  hoveredDay =
+    null;
+
+
+  viewMode =
+    "year";
+
+
+  yearSystems.forEach(
+    system => {
+
+      if (
+        system.year ===
+        2025
+      ) {
+
+        system.wrapper.visible =
+          true;
+
+      }
+
+    }
+  );
+
+
+  if (
+    yearDetail2025Group
+  ) {
+
+    yearDetail2025Group.visible =
+      true;
+
+  }
+
+
+  if (
+    yearDetail2025System
+  ) {
+
+    renderYearDetailPanel(
+      yearDetail2025System
+    );
+
+  }
+
+
+  interactionHint.textContent =
+    "2025 YEAR DETAIL · HOVER / CLICK A MONTH · DRAG TO ROTATE";
+
+
+  updateThunderYearChart(
+    2025
+  );
+
+
+  showThunderBackButton(
+    "year"
+  );
+
+
+  stage.style.cursor =
+    "grab";
+
+}
+
+
+
+
+/* =========================================================
+   2025 DETAIL HELPERS
+   ========================================================= */
+
+function yearDetailDaysInMonth(
+  year,
+  month
+) {
+  return new Date(
+    Date.UTC(
+      year,
+      month,
+      0
+    )
+  ).getUTCDate();
+}
+
+
+function calculateYearDetailDailyLogCap(
+  records
+) {
+  const values =
+    records
+      .filter(
+        record =>
+          record.value >
+          0
+      )
+
+      .map(
+        record =>
+          Math.log1p(
+            record.value
+          )
+      )
+
+      .sort(
+        (a, b) =>
+          a - b
+      );
+
+
+  if (
+    !values.length
+  ) {
+    return 1;
+  }
+
+
+  /*
+   * Same 98th-percentile strategy
+   * used in Prototype 03.1.
+   */
+  const index =
+    Math.floor(
+      (
+        values.length -
+        1
+      ) *
+      0.98
+    );
+
+
+  return Math.max(
+    values[index],
+    1
+  );
+}
+
+
+function normaliseYearDetailLightning(
+  value,
+  cap
+) {
+  if (
+    value <=
+    0
+  ) {
+    return 0;
+  }
+
+
+  return clamp(
+    Math.log1p(
+      value
+    ) /
+      cap,
+
+    0,
+    1
+  );
+}
+
+
+function yearDetailIntensityLevel(
+  intensity
+) {
+  if (
+    intensity ===
+    0
+  ) {
+    return 0;
+  }
+
+
+  if (
+    intensity <
+    0.20
+  ) {
+    return 1;
+  }
+
+
+  if (
+    intensity <
+    0.45
+  ) {
+    return 2;
+  }
+
+
+  if (
+    intensity <
+    0.72
+  ) {
+    return 3;
+  }
+
+
+  return 4;
+}
+
+
+function yearDetailDayTubeRadius(
+  level
+) {
+  return [
+    0.00160,
+    0.00220,
+    0.00310,
+    0.00460,
+    0.00680
+  ][level];
+}
+
+
+function yearDetailDayOpacity(
+  level
+) {
+  return [
+    0.080,
+    0.18,
+    0.36,
+    0.66,
+    0.96
+  ][level];
+}
+
+
+function yearDetailGlowOpacity(
+  level
+) {
+  return [
+    0.000,
+    0.000,
+    0.035,
+    0.085,
+    0.170
+  ][level];
+}
+
+
+/* =========================================================
+   2025 GOLD COLOUR SYSTEM
+
+   Base:
+   current 2025 Year colour
+
+   Weak days:
+   bright / warm gold
+
+   Medium:
+   pale yellow
+
+   Strong:
+   yellow-white
+
+   Peak:
+   white-hot
+   ========================================================= */
+
+function yearDetail2025Colour(
+  monthIndex,
+  intensity
+) {
+  const pair =
+    YEAR_COLOUR_PAIRS[
+      2025 -
+      START_YEAR
+    ];
+
+
+  const base =
+    new THREE.Color(
+      pair[0]
+    );
+
+
+  const accent =
+    new THREE.Color(
+      pair[1]
+    );
+
+
+  const monthT =
+    monthIndex /
+    Math.max(
+      1,
+      MONTH_COUNT -
+      1
+    );
+
+
+  /*
+   * All 12 Months stay inside
+   * the 2025 gold identity.
+   *
+   * Earlier Months:
+   * slightly richer gold.
+   *
+   * Later Months:
+   * slightly paler yellow.
+   */
+  const monthColour =
+    base
+      .clone()
+      .lerp(
+        accent,
+
+        0.10 +
+          monthT *
+            0.42
+      );
+
+
+  /*
+   * Strong Daily lightning
+   * approaches white-hot light.
+   */
+  return monthColour.lerp(
+    new THREE.Color(
+      0xffffff
+    ),
+
+    Math.pow(
+      intensity,
+      0.75
+    ) *
+      0.64
+  );
+}
+
+
+/* =========================================================
+   CLEANUP
+   ========================================================= */
+
+function disposeYearDetailObject(
+  object
+) {
+  object.traverse(
+    child => {
+
+      if (
+        child.geometry
+      ) {
+        child.geometry
+          .dispose?.();
+      }
+
+
+      if (
+        child.material
+      ) {
+
+        if (
+          Array.isArray(
+            child.material
+          )
+        ) {
+
+          child.material
+            .forEach(
+              material =>
+                material
+                  .dispose?.()
+            );
+
+        } else {
+
+          child.material
+            .dispose?.();
+
+        }
+
+      }
+
+    }
+  );
+}
+
+
+function clear2025YearDetail() {
+
+  if (
+    yearDetail2025Group
+  ) {
+
+    masterMotif.remove(
+      yearDetail2025Group
+    );
+
+
+    disposeYearDetailObject(
+      yearDetail2025Group
+    );
+
+  }
+
+
+  yearDetail2025Group =
+    null;
+
+
+  yearDetail2025System =
+    null;
+
+
+  yearDetail2025MonthOrbitOffset =
+    0;
+
+
+  yearDetail2025MonthSystems.length =
+    0;
+
+}
+
+
+/* =========================================================
+   BUILD 2025 MONTH RIPPLE SYSTEMS
+   ========================================================= */
+
+function create2025YearDetail(
+  system
+) {
+
+  clear2025YearDetail();
+
+
+  if (
+    !system ||
+    system.year !==
+      2025
+  ) {
+    return;
+  }
+
+
+  const records2025 =
+    recordsByYear.get(
+      2025
+    ) ||
+    [];
+
+
+  /*
+   * Preserve Prototype 03.1
+   * 98th-percentile Daily scaling.
+   */
+  const localDailyLogCap =
+    calculateYearDetailDailyLogCap(
+      records2025
+    );
+
+
+  yearDetail2025System =
+    system;
+
+
+  yearDetail2025Group =
+    new THREE.Group();
+
+
+  masterMotif.add(
+    yearDetail2025Group
+  );
+
+
+  /*
+   * Build:
+   * 12 Months
+   * ×
+   * actual 28–31 Daily records.
+   */
+  for (
+    let monthIndex = 0;
+    monthIndex <
+      MONTH_COUNT;
+    monthIndex += 1
+  ) {
+
+    const monthNumber =
+      monthIndex +
+      1;
+
+
+    const calendarDays =
+      yearDetailDaysInMonth(
+        2025,
+        monthNumber
+      );
+
+
+    const monthRecords =
+      records2025.filter(
+        record =>
+          record.month ===
+          monthNumber
+      );
+
+
+    const monthRoot =
+      new THREE.Group();
+
+
+    /*
+     * Invisible interaction volume.
+     *
+     * Month visual outer radius = 0.42
+     * Hit sphere radius = 0.47
+     */
+    const monthHitTarget =
+      new THREE.Mesh(
+
+        new THREE.SphereGeometry(
+          0.47,
+          12,
+          8
+        ),
+
+        new THREE.MeshBasicMaterial({
+
+          transparent:
+            true,
+
+          opacity:
+            0.001,
+
+          depthWrite:
+            false,
+
+          depthTest:
+            false
+
+        })
+
+      );
+
+
+    monthHitTarget.userData = {
+
+      kind:
+        "month",
+
+      month:
+        monthNumber,
+
+      monthIndex
+
+    };
+
+
+    monthRoot.add(
+      monthHitTarget
+    );
+
+
+    const days =
+      [];
+
+
+    monthRecords.forEach(
+      record => {
+
+        const intensity =
+          normaliseYearDetailLightning(
+            record.value,
+            localDailyLogCap
+          );
+
+
+        const level =
+          yearDetailIntensityLevel(
+            intensity
+          );
+
+
+        /*
+         * Day chronology → radius.
+         *
+         * Day 01 = innermost.
+         * Last date = outermost.
+         */
+        const radialT =
+          (
+            record.day -
+            1
+          ) /
+          Math.max(
+            1,
+
+            calendarDays -
+            1
+          );
+
+
+        const ringRadius =
+          lerp(
+            YEAR_DETAIL_MONTH_INNER_RADIUS,
+            YEAR_DETAIL_MONTH_OUTER_RADIUS,
+            radialT
+          );
+
+
+        const colourDay =
+          yearDetail2025Colour(
+            monthIndex,
+            intensity
+          );
+
+
+        const dayRoot =
+          new THREE.Group();
+
+
+        /* -----------------------------------------------
+           DAILY CORE RING
+           ----------------------------------------------- */
+
+        const geometry =
+          new THREE.TorusGeometry(
+            ringRadius,
+
+            yearDetailDayTubeRadius(
+              level
+            ),
+
+            7,
+            64
+          );
+
+
+        const material =
+          new THREE.MeshBasicMaterial({
+
+            color:
+              colourDay,
+
+            transparent:
+              true,
+
+            opacity:
+              yearDetailDayOpacity(
+                level
+              ),
+
+            blending:
+              level >=
+                3
+
+                ? THREE.AdditiveBlending
+
+                : THREE.NormalBlending,
+
+            depthWrite:
+              false,
+
+            depthTest:
+              true
+
+          });
+
+
+        const ring =
+          new THREE.Mesh(
+            geometry,
+            material
+          );
+
+
+        dayRoot.add(
+          ring
+        );
+
+
+        /* -----------------------------------------------
+           DIFFUSE GLOW
+           ----------------------------------------------- */
+
+        let haloRing =
+          null;
+
+
+        if (
+          level >=
+          2
+        ) {
+
+          const haloGeometry =
+            new THREE.TorusGeometry(
+
+              ringRadius,
+
+              yearDetailDayTubeRadius(
+                level
+              ) *
+                3.2,
+
+              7,
+              64
+
+            );
+
+
+          haloRing =
+            new THREE.Mesh(
+
+              haloGeometry,
+
+              new THREE.MeshBasicMaterial({
+
+                color:
+                  colourDay,
+
+                transparent:
+                  true,
+
+                opacity:
+                  yearDetailGlowOpacity(
+                    level
+                  ),
+
+                blending:
+                  THREE.AdditiveBlending,
+
+                depthWrite:
+                  false,
+
+                depthTest:
+                  true
+
+              })
+
+            );
+
+
+          dayRoot.add(
+            haloRing
+          );
+
+        }
+
+
+        /* -----------------------------------------------
+           SECONDARY SOFT HALO
+           ----------------------------------------------- */
+
+        let outerHaloRing =
+          null;
+
+
+        if (
+          level >=
+          3
+        ) {
+
+          const outerHaloGeometry =
+            new THREE.TorusGeometry(
+
+              ringRadius,
+
+              yearDetailDayTubeRadius(
+                level
+              ) *
+                5.5,
+
+              7,
+              64
+
+            );
+
+
+          outerHaloRing =
+            new THREE.Mesh(
+
+              outerHaloGeometry,
+
+              new THREE.MeshBasicMaterial({
+
+                color:
+                  colourDay,
+
+                transparent:
+                  true,
+
+                opacity:
+                  level ===
+                    4
+
+                    ? 0.045
+
+                    : 0.022,
+
+                blending:
+                  THREE.AdditiveBlending,
+
+                depthWrite:
+                  false,
+
+                depthTest:
+                  true
+
+              })
+
+            );
+
+
+          dayRoot.add(
+            outerHaloRing
+          );
+
+        }
+
+
+        monthRoot.add(
+          dayRoot
+        );
+
+
+        days.push({
+
+          day:
+            record.day,
+
+          value:
+            record.value,
+
+          intensity,
+
+          level,
+
+          radialT,
+
+          ringRadius,
+
+          root:
+            dayRoot,
+
+          ring,
+
+          haloRing,
+
+          outerHaloRing,
+
+
+          /*
+           * Same delayed temporal phase
+           * used in Prototype 03.1.
+           */
+          phase:
+            record.day *
+              0.43 +
+
+            monthIndex *
+              0.71
+
+        });
+
+      }
+    );
+
+
+    yearDetail2025Group.add(
+      monthRoot
+    );
+
+
+    yearDetail2025MonthSystems.push({
+
+      index:
+        monthIndex,
+
+      month:
+        monthNumber,
+
+      name:
+        YEAR_DETAIL_MONTH_NAMES[
+          monthIndex
+        ],
+
+      root:
+        monthRoot,
+
+      days,
+
+      calendarDays,
+
+      hitTarget:
+        monthHitTarget,
+
+
+      /*
+       * JAN → DEC distributed evenly
+       * around the Year orbit.
+       */
+      baseAngle:
+        (
+          monthIndex /
+          MONTH_COUNT
+        ) *
+        Math.PI *
+        2,
+
+
+      wobblePhase:
+        monthIndex *
+        0.63
+
+    });
+
+  }
+
+
+  console.log(
+    "2025 Level 2 detail built:",
+
+    yearDetail2025MonthSystems.length,
+
+    "Month ripple systems ·",
+
+    yearDetail2025MonthSystems.reduce(
+      (
+        total,
+        month
+      ) =>
+        total +
+        month.days.length,
+
+      0
+    ),
+
+    "Daily rings"
+  );
+
+}
+
+
+/* =========================================================
+   UPDATE 2025 MONTH SYSTEM
+   ========================================================= */
+
+function update2025YearDetail(
+  time
+) {
+
+  if (
+    !yearDetail2025Group ||
+    !yearDetail2025System ||
+    viewMode !==
+      "year" ||
+    selectedYear !==
+      2025
+  ) {
+    return;
+  }
+
+
+  /*
+   * Same Month circulation speed
+   * as Prototype 03.1.
+   */
+  yearDetail2025MonthOrbitOffset =
+    time *
+    0.075;
+
+
+  const xAxis =
+    new THREE.Vector3(
+      1,
+      0,
+      0
+    );
+
+
+  const yAxis =
+    new THREE.Vector3(
+      0,
+      1,
+      0
+    );
+
+
+  const zAxis =
+    new THREE.Vector3(
+      0,
+      0,
+      1
+    );
+
+
+  yearDetail2025MonthSystems.forEach(
+    month => {
+
+      /*
+       * 12 Month centres remain
+       * evenly spaced around Year.
+       */
+      const monthAngle =
+        month.baseAngle +
+        yearDetail2025MonthOrbitOffset;
+
+
+      const cosMonth =
+        Math.cos(
+          monthAngle
+        );
+
+
+      const sinMonth =
+        Math.sin(
+          monthAngle
+        );
+
+
+      month.root.position.set(
+
+        cosMonth *
+          YEAR_DETAIL_2025_RADIUS,
+
+        sinMonth *
+          YEAR_DETAIL_2025_RADIUS,
+
+        0
+
+      );
+
+
+      /*
+       * Month ripple plane sits
+       * perpendicular to tangent
+       * of Year orbit.
+       */
+      const monthTangent =
+        new THREE.Vector3(
+
+          -sinMonth,
+
+          cosMonth,
+
+          0
+
+        ).normalize();
+
+
+      const alignment =
+        new THREE.Quaternion()
+          .setFromUnitVectors(
+
+            zAxis,
+
+            monthTangent
+
+          );
+
+
+      /*
+       * Floating Month orientation.
+       */
+      const wobbleX =
+        new THREE.Quaternion()
+          .setFromAxisAngle(
+
+            xAxis,
+
+            Math.sin(
+              time *
+                0.36 +
+              month.wobblePhase
+            ) *
+              0.13
+
+          );
+
+
+      const wobbleY =
+        new THREE.Quaternion()
+          .setFromAxisAngle(
+
+            yAxis,
+
+            Math.cos(
+              time *
+                0.29 +
+              month.wobblePhase *
+                1.3
+            ) *
+              0.085
+
+          );
+
+
+      month.root.quaternion
+        .copy(
+          alignment
+        )
+
+        .multiply(
+          wobbleX
+        )
+
+        .multiply(
+          wobbleY
+        );
+
+
+      /* -----------------------------------------------
+         DAILY RIPPLE
+         ----------------------------------------------- */
+
+      month.days.forEach(
+        day => {
+
+          const amplitude =
+            lerp(
+
+              YEAR_DETAIL_RIPPLE_INNER_AMPLITUDE,
+
+              YEAR_DETAIL_RIPPLE_OUTER_AMPLITUDE,
+
+              day.radialT
+
+            );
+
+
+          const wave =
+            Math.sin(
+
+              time *
+                1.55 +
+
+              day.phase
+
+            );
+
+
+          /*
+           * Outer Daily rings move
+           * more strongly than inner rings.
+           */
+          day.root.position.z =
+            wave *
+            amplitude;
+
+
+          /*
+           * Tiny breathing.
+           */
+          const breathe =
+            1 +
+
+            Math.sin(
+
+              time *
+                0.47 +
+
+              day.phase
+
+            ) *
+              0.006;
+
+
+          day.root.scale.setScalar(
+            breathe
+          );
+
+
+          /*
+           * Halo shimmer.
+           */
+          if (
+            day.haloRing
+          ) {
+
+            const haloPulse =
+              1 +
+
+              Math.sin(
+
+                time *
+                  0.82 +
+
+                day.phase
+
+              ) *
+                0.026;
+
+
+            day.haloRing
+              .scale
+              .setScalar(
+                haloPulse
+              );
+
+          }
+
+
+          /*
+           * Secondary outer halo.
+           */
+          if (
+            day.outerHaloRing
+          ) {
+
+            const outerPulse =
+              1 +
+
+              Math.sin(
+
+                time *
+                  0.63 +
+
+                day.phase +
+
+                0.7
+
+              ) *
+                0.035;
+
+
+            day.outerHaloRing
+              .scale
+              .setScalar(
+                outerPulse
+              );
+
+          }
+
+        }
+      );
+
+    }
+  );
+
+
+  /*
+   * Whole hierarchy motion preserved
+   * from Prototype 03.1.
+   */
+  const rotationX =
+    0.70 +
+
+    Math.sin(
+      time *
+      0.12
+    ) *
+      0.10;
+
+
+  const rotationY =
+    -0.30 +
+
+    time *
+      0.087;
+
+
+  const rotationZ =
+    0.12 +
+
+    Math.cos(
+      time *
+      0.09
+    ) *
+      0.075;
+
+
+  yearDetail2025Group.rotation.set(
+
+    rotationX,
+
+    rotationY,
+
+    rotationZ
+
+  );
+
+}
+
+
 function buildYearRhythms() {
 
   YEARS.forEach(
@@ -6204,156 +9180,147 @@ function buildYearRhythms() {
 
 
 
+
 function updateYearRhythms(
-
   time
-
 ) {
 
   yearSystems.forEach(
-
     system => {
 
-
-
       system.coreMaterial
-
         .uniforms
-
         .uTime
-
         .value =
-
           time;
-
-
-
 
 
       system.haloMaterial
-
         .uniforms
-
         .uTime
-
         .value =
-
           time;
 
 
-
-
-
       if (
-
         system.flareMaterial
-
       ) {
 
         system.flareMaterial
-
           .uniforms
-
           .uTime
-
           .value =
-
             time;
 
       }
 
 
-
-
-
-      system.wrapper.rotation.x =
-
-        0;
-
-
-
-
-
-      system.wrapper.rotation.z =
-
-        0;
-
-
-
-
-
+      /*
+       * Selected Year detail.
+       */
       if (
-
         viewMode ===
-
           "year" &&
-
         system.year ===
-
           selectedYear
-
       ) {
 
-        system.wrapper.rotation.y =
+        /*
+         * Only 2025 currently receives
+         * the complete Prototype 03.1
+         * hierarchy test.
+         */
+        if (
+          selectedYear ===
+          2025
+        ) {
 
-          0;
+          system.wrapper.rotation.x =
+            0.70 +
+
+            Math.sin(
+              time *
+              0.12
+            ) *
+              0.10;
+
+
+          system.wrapper.rotation.y =
+            -0.30 +
+
+            time *
+              0.087;
+
+
+          system.wrapper.rotation.z =
+            0.12 +
+
+            Math.cos(
+              time *
+              0.09
+            ) *
+              0.075;
+
+        } else {
+
+          system.wrapper.rotation.x =
+            0;
+
+          system.wrapper.rotation.y =
+            0;
+
+          system.wrapper.rotation.z =
+            0;
+
+        }
 
       } else {
 
-        system.wrapper.rotation.y =
+        /*
+         * Original 22-Year overview motion.
+         */
+        system.wrapper.rotation.x =
+          0;
 
+
+        system.wrapper.rotation.z =
+          0;
+
+
+        system.wrapper.rotation.y =
           system.initialY +
 
           time *
-
             system.rotationSpeed;
 
       }
 
     }
-
   );
 
 
-
-
-
   masterMotif.rotation.x =
-
     0;
-
-
-
 
 
   masterMotif.rotation.z =
-
     0;
 
 
-
-
-
   if (
-
     viewMode ===
-
       "year"
-
   ) {
 
     masterMotif.rotation.y =
-
       0;
 
   } else {
 
     masterMotif.rotation.y =
-
       manualMasterY +
 
       time *
-
         MASTER_Y_SPEED;
 
   }
@@ -6361,15 +9328,9 @@ function updateYearRhythms(
 }
 
 
-
-
-
 /* =========================================================
-
    INTERACTION
-
    ========================================================= */
-
 
 
 function formatLightningCount(
@@ -7123,72 +10084,115 @@ function renderYearDetailPanel(
 
 
 
+
 function enterYearView(
-
   system
-
 ) {
 
   if (
-
     !system
-
   ) {
-
     return;
-
   }
 
 
-
-
-
   viewMode =
-
     "year";
 
 
-
   selectedYear =
-
     system.year;
-
-
-
 
 
   hideYearTooltip();
 
 
-
-
-
+  /*
+   * Detail view uses larger particles
+   * without changing Year radius.
+   */
   yearSystems.forEach(
+    candidate => {
 
+      const active =
+        candidate.year ===
+        selectedYear;
+
+
+      if (
+        candidate.coreMaterial
+          ?.uniforms
+          ?.uDetailScale
+      ) {
+
+        candidate.coreMaterial
+          .uniforms
+          .uDetailScale
+          .value =
+
+            active
+              ? 1.48
+              : 1.0;
+
+      }
+
+
+      if (
+        candidate.haloMaterial
+          ?.uniforms
+          ?.uDetailScale
+      ) {
+
+        candidate.haloMaterial
+          .uniforms
+          .uDetailScale
+          .value =
+
+            active
+              ? 1.30
+              : 1.0;
+
+      }
+
+    }
+  );
+
+
+  if (
+    selectedYear ===
+    2025
+  ) {
+
+    yearDetailManualYaw =
+      0;
+
+
+    yearDetailManualPitch =
+      0;
+
+  }
+
+
+  /*
+   * Keep only selected Year visible.
+   */
+  yearSystems.forEach(
     candidate => {
 
       candidate.wrapper.visible =
-
         candidate.year ===
-
         selectedYear;
-
 
 
       candidate.wrapper.scale.setScalar(
 
         candidate.year ===
-
           selectedYear
 
           ? 2.0 /
-
             Math.max(
-
               0.001,
-
               candidate.radius
-
             )
 
           : 1
@@ -7196,318 +10200,1261 @@ function enterYearView(
       );
 
     }
-
   );
 
 
+  /*
+   * TEST STAGE:
+   *
+   * Only 2025 receives
+   * the complete Month hierarchy.
+   */
+  if (
+    selectedYear ===
+    2025
+  ) {
 
+    create2025YearDetail(
+      system
+    );
+
+
+    interactionHint.textContent =
+      "2025 YEAR DETAIL · HOVER / CLICK A MONTH · DRAG TO ROTATE";
+
+  } else {
+
+    clear2025YearDetail();
+
+
+    interactionHint.textContent =
+      "YEAR DETAIL · 2025 MONTH SYSTEM TEST ONLY";
+
+  }
 
 
   overviewLabel.style.display =
-
     "none";
 
 
-
-
-
-  interactionHint.textContent =
-
-    "YEAR DETAIL · MONTH VISUALISATION NEXT";
-
-
-
-
-
   detailPanel.style.display =
-
     "block";
 
 
-
-
-
   renderYearDetailPanel(
-
     system
-
   );
 
 
+  updateThunderYearChart(
+    system.year
+  );
 
+
+  showThunderBackButton(
+    "year"
+  );
 
 
   stage.style.cursor =
-
     "default";
 
 }
 
 
 
-
-
 function exitYearView() {
 
-  viewMode =
+  hideThunderDetailOverlay();
 
-    "overview";
+  clear2025MonthDetail();
 
 
+  clear2025YearDetail();
 
-  selectedYear =
 
+  selectedMonth =
     null;
 
 
+  hoveredMonth =
+    null;
 
+
+  hoveredDay =
+    null;
 
 
   yearSystems.forEach(
-
     system => {
 
-      system.wrapper.visible =
-
-        true;
-
-
-
-      system.wrapper.scale.setScalar(
-
-        1
-
-      );
-
-    }
-
-  );
-
-
-
-
-
-  detailPanel.style.display =
-
-    "none";
-
-
-
-
-
-  overviewLabel.style.display =
-
-    "block";
-
-
-
-
-
-  interactionHint.textContent =
-
-    "HOVER A YEAR · CLICK TO OPEN · DRAG HORIZONTALLY · SCROLL TO ZOOM";
-
-
-
-
-
-  stage.style.cursor =
-
-    "grab";
-}
-
-
-
-
-
-function attachInteraction() {
-
-  stage.addEventListener(
-
-    "pointerdown",
-
-
-
-    event => {
-
-
-
       if (
-
-        viewMode !==
-
-          "overview"
-
+        system.coreMaterial
+          ?.uniforms
+          ?.uDetailScale
       ) {
 
-        return;
+        system.coreMaterial
+          .uniforms
+          .uDetailScale
+          .value =
+            1.0;
 
       }
 
 
+      if (
+        system.haloMaterial
+          ?.uniforms
+          ?.uDetailScale
+      ) {
+
+        system.haloMaterial
+          .uniforms
+          .uDetailScale
+          .value =
+            1.0;
+
+      }
+
+    }
+  );
 
 
+  viewMode =
+    "overview";
 
-      pointer.down =
 
+  selectedYear =
+    null;
+
+
+  yearSystems.forEach(
+    system => {
+
+      system.wrapper.visible =
         true;
 
 
+      system.wrapper.scale.setScalar(
+        1
+      );
+
+    }
+  );
+
+
+  detailPanel.style.display =
+    "none";
+
+
+  overviewLabel.style.display =
+    "block";
+
+
+  interactionHint.textContent =
+    "HOVER A YEAR · CLICK TO OPEN · DRAG HORIZONTALLY · SCROLL TO ZOOM";
+
+
+  stage.style.cursor =
+    "grab";
+
+}
+
+
+
+/* =========================================================
+   THUNDER_DETAIL_CHART_BACK_V1
+
+   DETAIL NAVIGATION + MINI BAR CHART
+
+   LEVEL 2:
+   Year → Jan–Dec monthly bars
+
+   LEVEL 3:
+   Month → Daily bars
+   ========================================================= */
+
+let thunderDetailChart =
+  null;
+
+let thunderDetailBackButton =
+  null;
+
+
+/* =========================================================
+   COLOUR HELPERS
+   ========================================================= */
+
+function thunderColourToCss(
+  colourNumber
+) {
+
+  return (
+    "#" +
+    colourNumber
+      .toString(16)
+      .padStart(
+        6,
+        "0"
+      )
+  );
+
+}
+
+
+/* =========================================================
+   CREATE OVERLAY UI
+   ========================================================= */
+
+function ensureThunderDetailOverlay() {
+
+  if (
+    !stage
+  ) {
+    return;
+  }
+
+
+  /* -------------------------
+     RIGHT-BOTTOM BAR CHART
+     ------------------------- */
+
+  if (
+    !thunderDetailChart
+  ) {
+
+    thunderDetailChart =
+      document.createElement(
+        "div"
+      );
+
+
+    thunderDetailChart.id =
+      "thunder-detail-chart";
+
+
+    Object.assign(
+      thunderDetailChart.style,
+
+      {
+        position:
+          "absolute",
+
+        right:
+          "28px",
+
+        bottom:
+          "28px",
+
+        zIndex:
+          "7",
+
+        width:
+          "330px",
+
+        maxWidth:
+          "calc(100vw - 80px)",
+
+        padding:
+          "12px 13px 10px",
+
+        boxSizing:
+          "border-box",
+
+        border:
+          "1px solid rgba(255,235,160,.10)",
+
+        borderRadius:
+          "8px",
+
+        background:
+          "rgba(2,3,6,.60)",
+
+        backdropFilter:
+          "blur(6px)",
+
+        fontFamily:
+          "Arial, Helvetica, sans-serif",
+
+        color:
+          "#f8f8ff",
+
+        pointerEvents:
+          "none",
+
+        display:
+          "none"
+      }
+
+    );
+
+
+    stage.appendChild(
+      thunderDetailChart
+    );
+
+  }
+
+
+  /* -------------------------
+     LEFT-BOTTOM BACK BUTTON
+     ------------------------- */
+
+  if (
+    !thunderDetailBackButton
+  ) {
+
+    thunderDetailBackButton =
+      document.createElement(
+        "button"
+      );
+
+
+    thunderDetailBackButton.type =
+      "button";
+
+
+    thunderDetailBackButton.id =
+      "thunder-detail-back";
+
+
+    Object.assign(
+      thunderDetailBackButton.style,
+
+      {
+        position:
+          "absolute",
+
+        left:
+          "36px",
+
+        bottom:
+          "28px",
+
+        zIndex:
+          "20",
+
+        minHeight:
+          "36px",
+
+        padding:
+          "8px 13px",
+
+        border:
+          "1px solid rgba(220,225,245,.16)",
+
+        borderRadius:
+          "999px",
+
+        background:
+          "rgba(2,3,6,.72)",
+
+        backdropFilter:
+          "blur(7px)",
+
+        color:
+          "rgba(238,240,250,.78)",
+
+        fontFamily:
+          "Arial, Helvetica, sans-serif",
+
+        fontSize:
+          "9px",
+
+        letterSpacing:
+          ".13em",
+
+        cursor:
+          "pointer",
+
+        display:
+          "none",
+
+        appearance:
+          "none"
+      }
+
+    );
+
+
+    /*
+     * Do not let scene dragging
+     * capture this button.
+     */
+    thunderDetailBackButton
+      .addEventListener(
+
+        "pointerdown",
+
+        event => {
+
+          event.stopPropagation();
+
+        }
+
+      );
+
+
+    thunderDetailBackButton
+      .addEventListener(
+
+        "click",
+
+        event => {
+
+          event.stopPropagation();
+
+
+          /*
+           * LEVEL 3
+           * Month → Year
+           */
+          if (
+            viewMode ===
+              "month"
+          ) {
+
+            exit2025MonthView();
+
+            return;
+          }
+
+
+          /*
+           * LEVEL 2
+           * Year → All Years
+           */
+          if (
+            viewMode ===
+              "year"
+          ) {
+
+            exitYearView();
+
+          }
+
+        }
+
+      );
+
+
+    stage.appendChild(
+      thunderDetailBackButton
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   BACK BUTTON STATE
+   ========================================================= */
+
+function showThunderBackButton(
+  mode
+) {
+
+  ensureThunderDetailOverlay();
+
+
+  if (
+    !thunderDetailBackButton
+  ) {
+    return;
+  }
+
+
+  if (
+    mode ===
+      "month"
+  ) {
+
+    thunderDetailBackButton
+      .textContent =
+        "← 2025 YEAR";
+
+  } else {
+
+    thunderDetailBackButton
+      .textContent =
+        "← ALL YEARS";
+
+  }
+
+
+  thunderDetailBackButton
+    .style
+    .display =
+      "block";
+
+}
+
+
+function hideThunderDetailOverlay() {
+
+  if (
+    thunderDetailChart
+  ) {
+
+    thunderDetailChart
+      .style
+      .display =
+        "none";
+
+  }
+
+
+  if (
+    thunderDetailBackButton
+  ) {
+
+    thunderDetailBackButton
+      .style
+      .display =
+        "none";
+
+  }
+
+}
+
+
+/* =========================================================
+   MINI BAR CHART
+   ========================================================= */
+
+function renderThunderBarChart(
+  {
+    title,
+    subtitle,
+    labels,
+    values,
+    year
+  }
+) {
+
+  ensureThunderDetailOverlay();
+
+
+  if (
+    !thunderDetailChart
+  ) {
+    return;
+  }
+
+
+  const safeValues =
+    values.map(
+      value =>
+        Number.isFinite(
+          value
+        )
+          ? Math.max(
+              0,
+              value
+            )
+          : 0
+    );
+
+
+  const maximum =
+    Math.max(
+      1,
+      ...safeValues
+    );
+
+
+  const yearIndex =
+    clamp(
+      year -
+        START_YEAR,
+      0,
+      YEAR_COUNT -
+        1
+    );
+
+
+  const pair =
+    YEAR_COLOUR_PAIRS[
+      yearIndex
+    ];
+
+
+  const baseColour =
+    thunderColourToCss(
+      pair[0]
+    );
+
+
+  const accentColour =
+    thunderColourToCss(
+      pair[1]
+    );
+
+
+  /*
+   * SVG coordinate system.
+   */
+  const width =
+    306;
+
+  const height =
+    94;
+
+  const left =
+    4;
+
+  const right =
+    4;
+
+  const top =
+    7;
+
+  const bottom =
+    19;
+
+
+  const plotWidth =
+    width -
+    left -
+    right;
+
+
+  const plotHeight =
+    height -
+    top -
+    bottom;
+
+
+  const count =
+    Math.max(
+      1,
+      safeValues.length
+    );
+
+
+  const slot =
+    plotWidth /
+    count;
+
+
+  /*
+   * 12 Month bars can be wider.
+   * 28–31 Daily bars remain thin.
+   */
+  const barWidth =
+    count <=
+      12
+
+      ? Math.max(
+          5,
+          slot *
+            0.48
+        )
+
+      : Math.max(
+          2.0,
+          slot *
+            0.42
+        );
+
+
+  const bars =
+    safeValues
+      .map(
+        (
+          value,
+          index
+        ) => {
+
+          const ratio =
+            value /
+            maximum;
+
+
+          const barHeight =
+            ratio *
+            plotHeight;
+
+
+          const x =
+            left +
+            index *
+              slot +
+            (
+              slot -
+              barWidth
+            ) /
+              2;
+
+
+          const y =
+            top +
+            plotHeight -
+            barHeight;
+
+
+          /*
+           * Strongest bars approach
+           * Year accent / white.
+           */
+          const opacity =
+            0.28 +
+            ratio *
+              0.72;
+
+
+          return `
+            <rect
+              x="${x.toFixed(2)}"
+              y="${y.toFixed(2)}"
+              width="${barWidth.toFixed(2)}"
+              height="${Math.max(
+                0,
+                barHeight
+              ).toFixed(2)}"
+              rx="${Math.min(
+                1.2,
+                barWidth /
+                  3
+              ).toFixed(2)}"
+              fill="${ratio > 0.72
+                ? accentColour
+                : baseColour}"
+              opacity="${opacity.toFixed(3)}"
+            />
+          `;
+
+        }
+      )
+      .join("");
+
+
+  /*
+   * X-axis labels.
+   *
+   * Year:
+   * JAN ... DEC
+   *
+   * Month:
+   * 01 / 05 / 10 / ...
+   */
+  const labelSvg =
+    labels
+      .map(
+        (
+          label,
+          index
+        ) => {
+
+          let visible =
+            true;
+
+
+          if (
+            count >
+            12
+          ) {
+
+            const day =
+              index +
+              1;
+
+
+            visible =
+              day ===
+                1 ||
+              day ===
+                count ||
+              day %
+                5 ===
+                0;
+
+          }
+
+
+          if (
+            !visible
+          ) {
+            return "";
+          }
+
+
+          const x =
+            left +
+            index *
+              slot +
+            slot /
+              2;
+
+
+          return `
+            <text
+              x="${x.toFixed(2)}"
+              y="${height - 4}"
+              text-anchor="middle"
+              font-size="${count <= 12 ? 5.7 : 5.2}"
+              fill="rgba(220,225,240,.42)"
+              font-family="Arial, Helvetica, sans-serif"
+            >
+              ${label}
+            </text>
+          `;
+
+        }
+      )
+      .join("");
+
+
+  thunderDetailChart.innerHTML = `
+    <div style="
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+      margin-bottom:3px;
+    ">
+
+      <div>
+
+        <div style="
+          font-size:8px;
+          letter-spacing:.14em;
+          color:rgba(220,225,240,.44);
+          margin-bottom:3px;
+        ">
+          ${subtitle}
+        </div>
+
+        <div style="
+          font-size:11px;
+          font-weight:600;
+          letter-spacing:.02em;
+          color:rgba(248,248,255,.88);
+        ">
+          ${title}
+        </div>
+
+      </div>
+
+
+      <div style="
+        font-size:7px;
+        letter-spacing:.10em;
+        color:rgba(220,225,240,.34);
+        text-align:right;
+        padding-top:2px;
+      ">
+        MAX<br>
+        ${formatLightningCount(
+          maximum
+        )}
+      </div>
+
+    </div>
+
+
+    <svg
+      viewBox="0 0 ${width} ${height}"
+      style="
+        display:block;
+        width:100%;
+        height:auto;
+        overflow:visible;
+      "
+      aria-label="${title}"
+    >
+
+      <line
+        x1="${left}"
+        y1="${top + plotHeight}"
+        x2="${width - right}"
+        y2="${top + plotHeight}"
+        stroke="rgba(220,225,240,.14)"
+        stroke-width=".65"
+      />
+
+      ${bars}
+
+      ${labelSvg}
+
+    </svg>
+  `;
+
+
+  thunderDetailChart
+    .style
+    .display =
+      "block";
+
+}
+
+
+/* =========================================================
+   YEAR CHART
+   JAN → DEC
+   ========================================================= */
+
+function updateThunderYearChart(
+  year
+) {
+
+  const stats =
+    monthlyStatsByYear.get(
+      year
+    );
+
+
+  if (
+    !stats
+  ) {
+    return;
+  }
+
+
+  renderThunderBarChart({
+
+    title:
+      `${year} MONTHLY RHYTHM`,
+
+    subtitle:
+      "MONTHLY LIGHTNING",
+
+    labels:
+      [
+        "JAN",
+        "FEB",
+        "MAR",
+        "APR",
+        "MAY",
+        "JUN",
+        "JUL",
+        "AUG",
+        "SEP",
+        "OCT",
+        "NOV",
+        "DEC"
+      ],
+
+    values:
+      stats.totals,
+
+    year
+
+  });
+
+}
+
+
+/* =========================================================
+   MONTH CHART
+   DAY 01 → LAST DAY
+   ========================================================= */
+
+function updateThunderMonthChart(
+  year,
+  month
+) {
+
+  const records =
+    (
+      recordsByYear.get(
+        year
+      ) ||
+      []
+    )
+
+      .filter(
+        record =>
+          record.month ===
+          month
+      );
+
+
+  const calendarDays =
+    yearDetailDaysInMonth(
+      year,
+      month
+    );
+
+
+  const byDay =
+    new Map();
+
+
+  records.forEach(
+    record => {
+
+      byDay.set(
+        record.day,
+        record.value
+      );
+
+    }
+  );
+
+
+  const values =
+    Array.from(
+      {
+        length:
+          calendarDays
+      },
+
+      (
+        _,
+        index
+      ) =>
+        byDay.has(
+          index +
+          1
+        )
+
+          ? byDay.get(
+              index +
+              1
+            )
+
+          : 0
+    );
+
+
+  const labels =
+    Array.from(
+      {
+        length:
+          calendarDays
+      },
+
+      (
+        _,
+        index
+      ) =>
+        String(
+          index +
+          1
+        ).padStart(
+          2,
+          "0"
+        )
+    );
+
+
+  const monthName =
+    YEAR_DETAIL_MONTH_NAMES[
+      month -
+      1
+    ];
+
+
+  renderThunderBarChart({
+
+    title:
+      `${monthName} ${year} DAILY RHYTHM`,
+
+    subtitle:
+      "DAILY LIGHTNING",
+
+    labels,
+
+    values,
+
+    year
+
+  });
+
+}
+
+function attachInteraction() {
+
+  stage.addEventListener(
+    "pointerdown",
+
+    event => {
+
+      /*
+       * Left UI panel owns its clicks.
+       */
+      if (
+        event.target ===
+          detailPanel ||
+        detailPanel?.contains(
+          event.target
+        )
+      ) {
+        return;
+      }
+
+
+      /*
+       * Level 3 currently uses hover,
+       * not scene dragging.
+       */
+      if (
+        viewMode ===
+        "month"
+      ) {
+        return;
+      }
+
+
+      /*
+       * Other Year detail views
+       * are not interactive yet.
+       */
+      if (
+        viewMode ===
+          "year" &&
+        selectedYear !==
+          2025
+      ) {
+        return;
+      }
+
+
+      pointer.down =
+        true;
+
 
       pointer.moved =
-
         false;
 
 
-
       pointer.x =
-
         event.clientX;
-
 
 
       pointer.y =
-
         event.clientY;
-
 
 
       pointer.startX =
-
         event.clientX;
 
 
-
       pointer.startY =
-
         event.clientY;
-
-
-
 
 
       hideYearTooltip();
 
 
-
-
-
       stage.style.cursor =
-
         "grabbing";
 
 
-
-
-
       stage.setPointerCapture?.(
-
         event.pointerId
-
       );
 
     }
-
   );
 
 
-
-
-
   stage.addEventListener(
-
     "pointermove",
-
-
 
     event => {
 
-
-
+      /*
+       * DRAG
+       */
       if (
-
-        pointer.down &&
-
-        viewMode ===
-
-          "overview"
-
+        pointer.down
       ) {
 
         const dx =
-
           event.clientX -
-
           pointer.x;
 
 
-
+        const dy =
+          event.clientY -
+          pointer.y;
 
 
         const totalDistance =
-
           Math.hypot(
 
             event.clientX -
-
               pointer.startX,
 
-
-
             event.clientY -
-
               pointer.startY
 
           );
 
 
-
-
-
         if (
-
           totalDistance >
-
           4
-
         ) {
 
           pointer.moved =
-
             true;
 
         }
 
 
+        /*
+         * Level 1:
+         * drag whole Overview.
+         */
+        if (
+          viewMode ===
+          "overview"
+        ) {
+
+          manualMasterY +=
+            dx *
+            0.005;
+
+        }
 
 
+        /*
+         * Level 2:
+         * drag the selected 2025
+         * hierarchy while automatic
+         * movement keeps running.
+         */
+        if (
+          viewMode ===
+            "year" &&
+          selectedYear ===
+            2025
+        ) {
 
-        manualMasterY +=
-
-          dx *
-
-          0.005;
+          yearDetailManualYaw +=
+            dx *
+            0.005;
 
 
+          yearDetailManualPitch =
+            clamp(
 
+              yearDetailManualPitch +
+                dy *
+                  0.004,
+
+              -0.90,
+              0.90
+
+            );
+
+        }
 
 
         pointer.x =
-
           event.clientX;
 
 
-
         pointer.y =
-
           event.clientY;
 
 
-
-
-
         hideYearTooltip();
-
 
 
         return;
@@ -7515,85 +11462,98 @@ function attachInteraction() {
       }
 
 
-
-
-
-      updateYearHover(
-
-        event
-
-      );
-
-    }
-
-  );
-
-
-
-
-
-  stage.addEventListener(
-
-    "pointerup",
-
-
-
-    event => {
-
-
-
-      const wasClick =
-
-        pointer.down &&
-
-        !pointer.moved &&
-
+      /*
+       * HOVER
+       */
+      if (
         viewMode ===
+        "overview"
+      ) {
 
-          "overview";
+        updateYearHover(
+          event
+        );
 
+        return;
 
-
-
-
-      pointer.down =
-
-        false;
-
-
-
+      }
 
 
       if (
+        viewMode ===
+          "year" &&
+        selectedYear ===
+          2025
+      ) {
 
-        wasClick
+        updateMonthHover(
+          event
+        );
 
+        return;
+
+      }
+
+
+      if (
+        viewMode ===
+          "month" &&
+        selectedYear ===
+          2025
+      ) {
+
+        updateDayHover(
+          event
+        );
+
+      }
+
+    }
+  );
+
+
+  stage.addEventListener(
+    "pointerup",
+
+    event => {
+
+      if (
+        !pointer.down
+      ) {
+        return;
+      }
+
+
+      const wasClick =
+        !pointer.moved;
+
+
+      pointer.down =
+        false;
+
+
+      /*
+       * Level 1 click → Year.
+       */
+      if (
+        wasClick &&
+        viewMode ===
+          "overview"
       ) {
 
         const system =
-
           systemAtPointer(
-
             event
-
           );
-
-
-
 
 
         if (
-
           system
-
         ) {
 
           enterYearView(
-
             system
-
           );
-
 
 
           return;
@@ -7603,103 +11563,111 @@ function attachInteraction() {
       }
 
 
+      /*
+       * Level 2 click → Month.
+       */
+      if (
+        wasClick &&
+        viewMode ===
+          "year" &&
+        selectedYear ===
+          2025
+      ) {
 
+        const month =
+          monthAtPointer(
+            event
+          );
+
+
+        if (
+          month
+        ) {
+
+          enter2025MonthView(
+            month.month
+          );
+
+
+          return;
+
+        }
+
+      }
 
 
       if (
-
         viewMode ===
-
-          "overview"
-
+        "overview"
       ) {
 
         stage.style.cursor =
-
           "grab";
 
 
-
         updateYearHover(
-
           event
+        );
 
+      }
+
+
+      if (
+        viewMode ===
+          "year" &&
+        selectedYear ===
+          2025
+      ) {
+
+        stage.style.cursor =
+          "grab";
+
+
+        updateMonthHover(
+          event
         );
 
       }
 
     }
-
   );
 
 
-
-
-
   stage.addEventListener(
-
     "pointercancel",
-
-
 
     () => {
 
-
-
       pointer.down =
-
         false;
-
 
 
       pointer.moved =
-
         false;
-
 
 
       hideYearTooltip();
 
 
-
-
-
-      if (
-
+      stage.style.cursor =
         viewMode ===
+          "month"
 
-          "overview"
+          ? "default"
 
-      ) {
-
-        stage.style.cursor =
-
-          "grab";
-
-      }
+          : "grab";
 
     }
-
   );
 
 
-
-
-
   stage.addEventListener(
-
     "pointerleave",
-
-
 
     () => {
 
-
-
       if (
-
         !pointer.down
-
       ) {
 
         hideYearTooltip();
@@ -7707,109 +11675,64 @@ function attachInteraction() {
       }
 
     }
-
   );
 
 
-
-
-
   stage.addEventListener(
-
     "wheel",
-
-
 
     event => {
 
-
-
       if (
-
         event.target ===
-
           detailPanel ||
-
         detailPanel?.contains(
-
           event.target
-
         )
-
       ) {
-
         return;
-
       }
-
-
-
 
 
       event.preventDefault();
 
 
-
-
-
       cameraZoom *=
-
         Math.exp(
 
           -event.deltaY *
-
             0.001
 
         );
 
 
-
-
-
       cameraZoom =
-
         clamp(
 
           cameraZoom,
 
           0.65,
-
           2.1
 
         );
-
-
-
 
 
       updateOrthographicCamera();
 
     },
 
-
-
     {
-
       passive:
-
         false
-
     }
-
   );
 
 }
 
 
-
-
-
 /* =========================================================
-
    CAMERA
-
    ========================================================= */
-
 
 
 function updateOrthographicCamera() {
@@ -8020,6 +11943,20 @@ function animate(
 
     time
 
+  );
+
+  update2025YearDetail(
+    time
+  );
+
+
+  sync2025DetailRotation(
+    time
+  );
+
+
+  update2025MonthDetail(
+    time
   );
 
 
