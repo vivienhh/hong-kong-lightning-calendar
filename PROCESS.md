@@ -727,3 +727,18 @@ In the current overview, chronological order is represented by radius, annual li
 I also refined the visual language from solid particles into softer flowing light clusters with controlled diffusion. The colour system was adjusted toward layered gold, lemon yellow, champagne and yellow-white tones, with a small number of icy blue and lavender accents to preserve separation between overlapping years.
 
 This version is treated as the initial visual baseline for the 2005–2026 overview before adding interactive Year selection and Month/Day unfolding.
+
+
+### Building the interactive temporal hierarchy
+
+After establishing the compressed 2005–2026 overview, I developed a detail-on-demand interaction structure so that the visualisation could move between three temporal scales without showing all information at once.
+
+I first tested the interaction using 2025 before applying it to the full dataset. In the Year view, selecting 2025 isolates its Year orbit and unfolds twelve Month modules around it. Each Month contains concentric Daily rings, where Day 01 is the innermost ring and the final day of the month is the outermost. The Month and Daily rings keep the colour identity of the selected Year, while stronger lightning events become brighter, thicker and closer to white.
+
+I added hover and click interactions to support exploration. Hovering over a Year, Month or Daily ring reveals the corresponding lightning value, while clicking moves from Year to Month detail. In the Month view, the selected month is displayed independently so that individual Daily rings can be inspected more clearly.
+
+To make the 3D structure easier to explore, I kept the automatic motion but also added manual drag rotation. I also added back navigation between levels so that users can move between overview, Year and Month views without losing the temporal hierarchy.
+
+Finally, I added a small bar chart in the lower-right corner as a quantitative companion to the more expressive light-based visualisation. In the Year view, it shows monthly lightning totals from January to December. In the Month view, it shows daily lightning counts in chronological order. This gives users a more direct way to compare values while keeping the main concentric visualisation focused on temporal rhythm and intensity.
+
+For interaction, I used larger invisible hit areas around the visible rings. This improves hover and click accuracy without changing the appearance of the data marks.
