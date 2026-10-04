@@ -215,21 +215,17 @@ This helped me understand the basic structure of the data. It also showed that t
 
 That difference became important in almost every later design decision.
 
-### 2. Raw heatmap and logarithmic heatmap
+### 2. Heatmap and logarithmic transformation
 
-I then made both a **raw heatmap** and a **logarithmic heatmap** to see how different transformations changed the pattern that became visible.
-
-![Raw lightning heatmap](out/lightning-heatmap-raw.png)
-
-*Raw heatmap using the original lightning counts.*
+I also tested heatmaps to see how the lightning data changed under different visual transformations.
 
 ![Logarithmic lightning heatmap](out/lightning-heatmap-log.png)
 
-*Logarithmic heatmap. Compressing the extreme values made medium-intensity activity easier to see.*
+*Logarithmic heatmap of the daily lightning records. Compressing the extreme values made medium-intensity activity easier to see.*
 
-The raw heatmap stays closer to the original numerical differences, but the largest values quickly dominate the image, making many medium- and low-intensity days difficult to distinguish.
+When I first looked at the raw lightning counts, a small number of very large peaks dominated the scale, while many medium- and low-intensity days became difficult to distinguish.
 
-The logarithmic heatmap compresses those extreme differences and makes more of the medium-intensity activity visible.
+Using a logarithmic transformation compressed these extreme differences and made more of the activity visible across the full time range.
 
 This experiment made me realise that:
 
