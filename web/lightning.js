@@ -108,28 +108,71 @@ let cameraZoom =
    ========================================================= */
 
 const YEAR_COLOUR_PAIRS = [
-  [0x25e8ff, 0xe9ffff],
-  [0x1fe7cf, 0xd8fff0],
-  [0x59f2b2, 0xefffd9],
-  [0x8dff59, 0xf1ffc2],
-  [0x34f1e4, 0xd8ffff],
-  [0x20d8ff, 0xe8fcff],
-  [0x289dff, 0xdeefff],
-  [0x3f72ff, 0xdde2ff],
-  [0x6558ff, 0xe9e0ff],
-  [0x8b4fff, 0xf5e0ff],
-  [0xb34dff, 0xffddff],
-  [0xe84bd5, 0xffd9f1],
-  [0xff4fb8, 0xffe1f4],
-  [0xf05adf, 0xffe2ff],
-  [0xc775ff, 0xf4e2ff],
-  [0x91a8ff, 0xeaf3ff],
-  [0x4dc7ff, 0xe0faff],
-  [0x66ff63, 0xf0ffd1],
-  [0x25e0bf, 0xd5fff0],
-  [0x33a9ff, 0xe1f4ff],
-  [0xa95cff, 0xffe0ff],
-  [0x75f1ff, 0xf5ffff]
+  // 2005 — pale gold
+  [0xffc94a, 0xffffdf],
+
+  // 2006 — warm yellow
+  [0xffd84a, 0xffffcb],
+
+  // 2007 — lemon
+  [0xffe856, 0xffffbd],
+
+  // 2008 — ivory yellow
+  [0xf5e88a, 0xffffe5],
+
+  // 2009 — icy cyan accent
+  [0x78dce8, 0xdfffff],
+
+  // 2010 — electric yellow
+  [0xffed3d, 0xffffcc],
+
+  // 2011 — golden yellow
+  [0xffcd32, 0xfff1a8],
+
+  // 2012 — amber
+  [0xffad32, 0xffdf9c],
+
+  // 2013 — pale blue accent
+  [0x92bde5, 0xe6f3ff],
+
+  // 2014 — champagne
+  [0xffe49a, 0xffffed],
+
+  // 2015 — cool ice blue
+  [0x82cedc, 0xe6fcff],
+
+  // 2016 — cool lavender
+  [0xb8addd, 0xf2edff],
+
+  // 2017 — soft lemon
+  [0xf4df69, 0xffffcf],
+
+  // 2018 — acid lemon
+  [0xe8ee55, 0xfcffc8],
+
+  // 2019 — honey gold
+  [0xffc440, 0xffe7a8],
+
+  // 2020 — pale warm gold
+  [0xffd86a, 0xffffce],
+
+  // 2021 — luminous lemon
+  [0xffeb4b, 0xffffbd],
+
+  // 2022 — icy blue accent
+  [0x8fc9df, 0xe9faff],
+
+  // 2023 — amber yellow
+  [0xffbd3d, 0xffe1a0],
+
+  // 2024 — champagne yellow
+  [0xffdf72, 0xffffd4],
+
+  // 2025 — bright golden yellow
+  [0xffc735, 0xffffb6],
+
+  // 2026 — pale yellow-white
+  [0xffed8a, 0xfffff0]
 ];
 
 
@@ -1991,7 +2034,7 @@ function createYearHaloMaterial(
         float clusterExpansion =
           mix(
             0.82,
-            1.68,
+            1.56,
             glowHot
           );
 
@@ -2078,7 +2121,7 @@ function createYearHaloMaterial(
           exp(
             -d *
             d *
-            1.85
+            2.15
           );
 
 

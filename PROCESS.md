@@ -716,3 +716,14 @@ This iteration establishes a clearer data hierarchy: radius represents time, the
 I expanded the full Year → Month → Day structure to all 22 years from 2005 to 2026. Although the complete dataset could be rendered successfully, displaying all monthly and daily structures simultaneously caused severe visual overlap and additive-light overexposure. The central region became difficult to read, and differences between individual years were obscured.
 
 This test showed that simply reducing brightness would not solve the underlying information-density problem. I therefore decided to keep the detailed Month and Day structures for selected-year views, while redesigning the overview as a compressed yearly rhythm. In the next iteration, each Year orbit will retain annual and monthly variation directly on the ring, using colour, thickness, brightness, and local rhythm rather than displaying every Daily ring at once.
+
+
+### Establishing the compressed Year-rhythm overview
+
+After testing all 22 complete Year → Month → Day modules simultaneously, I found that the large number of overlapping Daily rings and additive light effects made the visualisation difficult to read. Instead of simply reducing opacity, I compressed the lower-level temporal variation into each Year orbit.
+
+In the current overview, chronological order is represented by radius, annual lightning totals influence overall thickness and brightness, and monthly lightning totals create local changes in the flowing light around each orbit. Strong Daily events are retained as sparse peak highlights.
+
+I also refined the visual language from solid particles into softer flowing light clusters with controlled diffusion. The colour system was adjusted toward layered gold, lemon yellow, champagne and yellow-white tones, with a small number of icy blue and lavender accents to preserve separation between overlapping years.
+
+This version is treated as the initial visual baseline for the 2005–2026 overview before adding interactive Year selection and Month/Day unfolding.
