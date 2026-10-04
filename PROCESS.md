@@ -755,3 +755,12 @@ The colour system also became dynamic. Each selected Year keeps the colour assig
 An important issue was incomplete temporal coverage. The dataset begins on 21 June 2005 and currently ends on 31 August 2026. I therefore treated missing records differently from genuine zero-lightning days. Months without records are shown as “NO DATA” rather than zero, and they cannot be opened as if Daily observations existed. The bar charts use the same distinction, so missing periods are not visually misrepresented as zero lightning.
 
 I tested the generalised system using both complete and partial years, including 2012, 2025, 2005 and 2026. This helped confirm that the same interaction structure could work across different Year colours, month lengths and coverage conditions without duplicating the visualisation code.
+
+
+### Final interaction and presentation polish
+
+In the final stage, I developed the visualisation from the earlier radial experiments into a three-level structure: Year → Month → Day. I also looked at several OpenProcessing examples to better understand particle movement, orbital structures, glow effects, and interaction in the browser, then adapted these ideas around my own lightning data and temporal hierarchy.
+
+I added annual, monthly, and daily bar charts so that the more expressive luminous structures could still be checked against exact values through hover. I also added short fade transitions between levels to make the navigation easier to follow.
+
+Finally, I updated the README with the final screenshots, selected process images, data limitations, and a link to the published interactive version.
