@@ -6,7 +6,7 @@
 
 
 
-   2005–2026 NEON DIFFUSE FLOW
+   Hong Kong Lightning · 2005–2026
 
 
 
@@ -1950,7 +1950,7 @@ function createStage() {
 
     ">
 
-      THUNDER RHYTHM · INTERACTIVE TEMPORAL VIEW
+      THUNDER RHYTHM
 
     </div>
 
@@ -9080,7 +9080,7 @@ function updateMonthDetail(
    ENTER / EXIT LEVEL 3
    ========================================================= */
 
-function enterMonthView(
+function enterMonthViewImmediate(
   monthNumber
 ) {
 
@@ -9205,7 +9205,7 @@ function enterMonthView(
 }
 
 
-function exitMonthView() {
+function exitMonthViewImmediate() {
 
   const year =
     selectedYear;
@@ -9284,6 +9284,351 @@ function exitMonthView() {
 }
 
 
+
+/* =========================================================
+   THUNDER_LEVEL_TRANSITIONS_V1
+
+   Short cinematic transition:
+
+   current view
+       ↓
+   fade to black
+       ↓
+   change temporal level
+       ↓
+   fade back in
+
+   Applies to:
+   Overview → Year
+   Year → Month
+   Month → Year
+   Year → Overview
+   ========================================================= */
+
+let thunderTransitionOverlay =
+  null;
+
+let thunderLevelTransitioning =
+  false;
+
+
+function ensureThunderTransitionOverlay() {
+
+  if (
+    thunderTransitionOverlay ||
+    !stage
+  ) {
+    return;
+  }
+
+
+  thunderTransitionOverlay =
+    document.createElement(
+      "div"
+    );
+
+
+  thunderTransitionOverlay.id =
+    "thunder-level-transition";
+
+
+  Object.assign(
+    thunderTransitionOverlay.style,
+
+    {
+      position:
+        "absolute",
+
+      inset:
+        "0",
+
+      zIndex:
+        "1000",
+
+      background:
+        "#020306",
+
+      opacity:
+        "0",
+
+      pointerEvents:
+        "none",
+
+      transition:
+        "opacity 50ms ease"
+    }
+  );
+
+
+  stage.appendChild(
+    thunderTransitionOverlay
+  );
+
+}
+
+
+function runThunderLevelTransition(
+  action
+) {
+
+  if (
+    thunderLevelTransitioning ||
+    typeof action !==
+      "function"
+  ) {
+    return;
+  }
+
+
+  /*
+   * Respect reduced-motion preference.
+   */
+  const reduceMotion =
+    window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)"
+    )?.matches;
+
+
+  if (
+    reduceMotion
+  ) {
+
+    action();
+
+    return;
+  }
+
+
+  ensureThunderTransitionOverlay();
+
+
+  if (
+    !thunderTransitionOverlay
+  ) {
+
+    action();
+
+    return;
+  }
+
+
+  thunderLevelTransitioning =
+    true;
+
+
+  hideYearTooltip();
+
+
+  hideThunderChartTooltip(
+    thunderOverviewChart
+  );
+
+
+  hideThunderChartTooltip(
+    thunderDetailChart
+  );
+
+
+  /*
+   * Immediately block repeat clicks.
+   */
+  thunderTransitionOverlay
+    .style
+    .pointerEvents =
+      "auto";
+
+
+  thunderTransitionOverlay
+    .style
+    .transition =
+      "opacity 190ms ease";
+
+
+  /*
+   * FADE TO BLACK
+   */
+  requestAnimationFrame(
+    () => {
+
+      thunderTransitionOverlay
+        .style
+        .opacity =
+          "1";
+
+    }
+  );
+
+
+  window.setTimeout(
+    () => {
+
+      /*
+       * Switch geometry / UI while screen is black.
+       */
+      try {
+
+        action();
+
+      } catch (
+        error
+      ) {
+
+        console.error(
+          "Thunder Rhythm level transition error:",
+          error
+        );
+
+      }
+
+
+      /*
+       * FADE BACK IN
+       */
+      thunderTransitionOverlay
+        .style
+        .transition =
+          "opacity 250ms ease";
+
+
+      requestAnimationFrame(
+        () => {
+
+          requestAnimationFrame(
+            () => {
+
+              thunderTransitionOverlay
+                .style
+                .opacity =
+                  "0";
+
+            }
+          );
+
+        }
+      );
+
+
+      window.setTimeout(
+        () => {
+
+          thunderTransitionOverlay
+            .style
+            .pointerEvents =
+              "none";
+
+
+          thunderLevelTransitioning =
+            false;
+
+        },
+        280
+      );
+
+    },
+    70
+  );
+
+}
+
+
+/* =========================================================
+   TRANSITION-WRAPPED NAVIGATION
+   ========================================================= */
+
+function enterYearView(
+  system
+) {
+
+  if (
+    !system
+  ) {
+    return;
+  }
+
+
+  runThunderLevelTransition(
+    () => {
+
+      enterYearViewImmediate(
+        system
+      );
+
+    }
+  );
+
+}
+
+
+function exitYearView() {
+
+  runThunderLevelTransition(
+    () => {
+
+      exitYearViewImmediate();
+
+    }
+  );
+
+}
+
+
+function enterMonthView(
+  monthNumber
+) {
+
+  if (
+    selectedYear ===
+      null
+  ) {
+    return;
+  }
+
+
+  const coverage =
+    monthCoverage(
+      selectedYear,
+      monthNumber
+    );
+
+
+  /*
+   * NO DATA months remain unavailable
+   * and therefore do not trigger a fade.
+   */
+  if (
+    coverage.state ===
+      "none"
+  ) {
+    return;
+  }
+
+
+  runThunderLevelTransition(
+    () => {
+
+      enterMonthViewImmediate(
+        monthNumber
+      );
+
+    }
+  );
+
+}
+
+
+function exitMonthView() {
+
+  runThunderLevelTransition(
+    () => {
+
+      exitMonthViewImmediate();
+
+    }
+  );
+
+}
+
+
 function buildYearRhythms() {
 
   YEARS.forEach(
@@ -9352,6 +9697,10 @@ function buildYearRhythms() {
 function updateYearRhythms(
   time
 ) {
+
+  syncThunderOverviewChartVisibility();
+
+
 
   yearSystems.forEach(
     system => {
@@ -10204,7 +10553,7 @@ function renderYearDetailPanel(
 
 
 
-function enterYearView(
+function enterYearViewImmediate(
   system
 ) {
 
@@ -10351,7 +10700,7 @@ function enterYearView(
 
 
 
-function exitYearView() {
+function exitYearViewImmediate() {
 
   hideThunderDetailOverlay();
 
@@ -10809,6 +11158,442 @@ function hideThunderDetailOverlay() {
 }
 
 
+
+/* =========================================================
+   THUNDER_CHART_HOVER_V1
+
+   Shared hover feedback for all three quantitative charts.
+
+   LEVEL 1 → Year + annual value
+   LEVEL 2 → Month + monthly value
+   LEVEL 3 → Date + daily value
+   ========================================================= */
+
+function hideThunderChartTooltip(
+  container
+) {
+
+  if (
+    !container
+  ) {
+    return;
+  }
+
+
+  const tooltip =
+    container.querySelector(
+      ".thunder-chart-tooltip"
+    );
+
+
+  if (
+    tooltip
+  ) {
+
+    tooltip.style.opacity =
+      "0";
+
+    tooltip.style.transform =
+      "translateY(4px)";
+
+  }
+
+}
+
+
+function ensureThunderChartTooltip(
+  container
+) {
+
+  let tooltip =
+    container.querySelector(
+      ".thunder-chart-tooltip"
+    );
+
+
+  if (
+    tooltip
+  ) {
+    return tooltip;
+  }
+
+
+  tooltip =
+    document.createElement(
+      "div"
+    );
+
+
+  tooltip.className =
+    "thunder-chart-tooltip";
+
+
+  Object.assign(
+    tooltip.style,
+
+    {
+      position:
+        "absolute",
+
+      zIndex:
+        "30",
+
+      minWidth:
+        "118px",
+
+      maxWidth:
+        "165px",
+
+      padding:
+        "7px 9px",
+
+      boxSizing:
+        "border-box",
+
+      border:
+        "1px solid rgba(255,235,160,.16)",
+
+      borderRadius:
+        "7px",
+
+      background:
+        "rgba(2,3,6,.92)",
+
+      backdropFilter:
+        "blur(7px)",
+
+      boxShadow:
+        "0 4px 22px rgba(0,0,0,.28)",
+
+      color:
+        "#f8f8ff",
+
+      fontFamily:
+        "Arial, Helvetica, sans-serif",
+
+      pointerEvents:
+        "none",
+
+      opacity:
+        "0",
+
+      transform:
+        "translateY(4px)",
+
+      transition:
+        "opacity 90ms ease, transform 90ms ease"
+    }
+  );
+
+
+  container.appendChild(
+    tooltip
+  );
+
+
+  return tooltip;
+
+}
+
+
+function showThunderChartTooltip(
+  container,
+  event,
+  item
+) {
+
+  if (
+    !container ||
+    !item
+  ) {
+    return;
+  }
+
+
+  const tooltip =
+    ensureThunderChartTooltip(
+      container
+    );
+
+
+  tooltip.innerHTML = `
+    <div style="
+      font-size:7px;
+      letter-spacing:.14em;
+      color:rgba(220,225,240,.42);
+      margin-bottom:3px;
+    ">
+      ${item.kicker || "DATA"}
+    </div>
+
+    <div style="
+      font-size:11px;
+      font-weight:600;
+      color:rgba(248,248,255,.92);
+      margin-bottom:5px;
+      white-space:nowrap;
+    ">
+      ${item.title || ""}
+    </div>
+
+    <div style="
+      font-size:7px;
+      letter-spacing:.10em;
+      color:rgba(220,225,240,.40);
+      margin-bottom:2px;
+    ">
+      ${item.valueLabel || "LIGHTNING"}
+    </div>
+
+    <div style="
+      font-size:13px;
+      font-weight:600;
+      color:#fff4bd;
+      font-variant-numeric:tabular-nums;
+    ">
+      ${item.valueText || "—"}
+    </div>
+
+    ${item.note
+      ? `<div style="
+          margin-top:5px;
+          font-size:6.5px;
+          line-height:1.4;
+          letter-spacing:.07em;
+          color:rgba(255,225,140,.52);
+        ">${item.note}</div>`
+      : ""}
+  `;
+
+
+  const rect =
+    container.getBoundingClientRect();
+
+
+  const tooltipWidth =
+    145;
+
+
+  let left =
+    event.clientX -
+    rect.left +
+    10;
+
+
+  let top =
+    event.clientY -
+    rect.top -
+    70;
+
+
+  if (
+    left +
+      tooltipWidth >
+    rect.width -
+      6
+  ) {
+
+    left =
+      event.clientX -
+      rect.left -
+      tooltipWidth -
+      10;
+
+  }
+
+
+  if (
+    top <
+    5
+  ) {
+
+    top =
+      event.clientY -
+      rect.top +
+      10;
+
+  }
+
+
+  tooltip.style.left =
+    `${Math.max(
+      5,
+      left
+    )}px`;
+
+
+  tooltip.style.top =
+    `${Math.max(
+      5,
+      top
+    )}px`;
+
+
+  tooltip.style.opacity =
+    "1";
+
+
+  tooltip.style.transform =
+    "translateY(0)";
+
+}
+
+
+function prepareThunderChartInteraction(
+  container,
+  hoverItems
+) {
+
+  if (
+    !container
+  ) {
+    return;
+  }
+
+
+  /*
+   * Store newest chart data on the container.
+   * Event listeners only need to be installed once.
+   */
+  container.__thunderChartHoverItems =
+    hoverItems ||
+    [];
+
+
+  container.style.pointerEvents =
+    "auto";
+
+
+  if (
+    container.dataset
+      .thunderHoverBound ===
+      "1"
+  ) {
+    return;
+  }
+
+
+  container.dataset.thunderHoverBound =
+    "1";
+
+
+  /*
+   * Chart interactions must not become
+   * canvas drag / zoom interactions.
+   */
+  [
+    "pointerdown",
+    "pointerup",
+    "click",
+    "wheel"
+  ].forEach(
+    eventName => {
+
+      container.addEventListener(
+        eventName,
+
+        event => {
+
+          event.stopPropagation();
+
+        }
+      );
+
+    }
+  );
+
+
+  container.addEventListener(
+    "pointerenter",
+
+    () => {
+
+      hideYearTooltip();
+
+    }
+  );
+
+
+  container.addEventListener(
+    "pointermove",
+
+    event => {
+
+      event.stopPropagation();
+
+      hideYearTooltip();
+
+
+      const target =
+        event.target.closest?.(
+          "[data-thunder-chart-index]"
+        );
+
+
+      if (
+        !target
+      ) {
+
+        hideThunderChartTooltip(
+          container
+        );
+
+        return;
+      }
+
+
+      const index =
+        Number(
+          target.getAttribute(
+            "data-thunder-chart-index"
+          )
+        );
+
+
+      const item =
+        container
+          .__thunderChartHoverItems?.[
+            index
+          ];
+
+
+      if (
+        !item
+      ) {
+
+        hideThunderChartTooltip(
+          container
+        );
+
+        return;
+      }
+
+
+      showThunderChartTooltip(
+        container,
+        event,
+        item
+      );
+
+    }
+  );
+
+
+  container.addEventListener(
+    "pointerleave",
+
+    () => {
+
+      hideThunderChartTooltip(
+        container
+      );
+
+    }
+  );
+
+}
+
+
 /* =========================================================
    MINI BAR CHART
    ========================================================= */
@@ -10820,7 +11605,8 @@ function renderThunderBarChart(
     labels,
     values,
     missing = [],
-    year
+    year,
+    hoverItems = []
   }
 ) {
 
@@ -11054,6 +11840,41 @@ function renderThunderBarChart(
       .join("");
 
 
+  /*
+   * Invisible full-slot hit areas make even
+   * very short / zero / NO DATA categories easy to hover.
+   */
+  const hitZones =
+    labels
+      .map(
+        (
+          _,
+          index
+        ) => {
+
+          const x =
+            left +
+            index *
+              slot;
+
+
+          return `
+            <rect
+              data-thunder-chart-index="${index}"
+              x="${x.toFixed(2)}"
+              y="${top}"
+              width="${slot.toFixed(2)}"
+              height="${plotHeight.toFixed(2)}"
+              fill="transparent"
+              pointer-events="all"
+            />
+          `;
+
+        }
+      )
+      .join("");
+
+
   const labelSvg =
     labels
       .map(
@@ -11197,10 +12018,18 @@ function renderThunderBarChart(
 
       ${bars}
 
+      ${hitZones}
+
       ${labelSvg}
 
     </svg>
   `;
+
+
+  prepareThunderChartInteraction(
+    thunderDetailChart,
+    hoverItems
+  );
 
 
   thunderDetailChart
@@ -11209,6 +12038,7 @@ function renderThunderBarChart(
       "block";
 
 }
+
 
 
 /* =========================================================
@@ -11276,6 +12106,85 @@ function updateThunderYearChart(
     );
 
 
+  const hoverItems =
+    YEAR_DETAIL_MONTH_NAMES.map(
+      (
+        monthName,
+        index
+      ) => {
+
+        const coverage =
+          coverages[index];
+
+
+        const value =
+          values[index];
+
+
+        let note =
+          "";
+
+
+        if (
+          coverage.state ===
+            "partial"
+        ) {
+
+          note =
+            `PARTIAL COVERAGE · ${String(
+              coverage.firstDay
+            ).padStart(
+              2,
+              "0"
+            )}–${String(
+              coverage.lastDay
+            ).padStart(
+              2,
+              "0"
+            )} ${monthName}`;
+
+        }
+
+
+        if (
+          coverage.state ===
+            "none"
+        ) {
+
+          note =
+            "NO RECORDED DATA";
+
+        }
+
+
+        return {
+          kicker:
+            "MONTH",
+
+          title:
+            `${monthName} ${year}`,
+
+          valueLabel:
+            "MONTHLY LIGHTNING",
+
+          valueText:
+            Number.isFinite(
+              value
+            )
+
+              ? formatLightningCount(
+                  value
+                )
+
+              : "NO DATA",
+
+          note
+        };
+
+      }
+    );
+
+
   renderThunderBarChart({
 
     title:
@@ -11291,11 +12200,14 @@ function updateThunderYearChart(
 
     missing,
 
-    year
+    year,
+
+    hoverItems
 
   });
 
 }
+
 
 
 /* =========================================================
@@ -11407,6 +12319,52 @@ function updateThunderMonthChart(
     ];
 
 
+  const hoverItems =
+    labels.map(
+      (
+        dayLabel,
+        index
+      ) => {
+
+        const value =
+          values[index];
+
+
+        return {
+          kicker:
+            "DAY",
+
+          title:
+            `${dayLabel} ${monthName} ${year}`,
+
+          valueLabel:
+            "DAILY LIGHTNING",
+
+          valueText:
+            Number.isFinite(
+              value
+            )
+
+              ? formatLightningCount(
+                  value
+                )
+
+              : "NO DATA",
+
+          note:
+            Number.isFinite(
+              value
+            )
+
+              ? ""
+
+              : "NO RECORDED DATA"
+        };
+
+      }
+    );
+
+
   renderThunderBarChart({
 
     title:
@@ -11421,11 +12379,616 @@ function updateThunderMonthChart(
 
     missing,
 
-    year
+    year,
+
+    hoverItems
 
   });
 
 }
+
+
+
+/* =========================================================
+   THUNDER_OVERVIEW_ANNUAL_CHART_V2
+
+   LEVEL 1 QUANTITATIVE COMPANION
+   2005–2026 recorded annual lightning totals
+
+   2005 and 2026 are partial coverage.
+   ========================================================= */
+
+let thunderOverviewChart =
+  null;
+
+
+function ensureThunderOverviewChart() {
+
+  if (
+    !stage
+  ) {
+    return;
+  }
+
+
+  if (
+    thunderOverviewChart
+  ) {
+    return;
+  }
+
+
+  thunderOverviewChart =
+    document.createElement(
+      "div"
+    );
+
+
+  thunderOverviewChart.id =
+    "thunder-overview-chart";
+
+
+  Object.assign(
+    thunderOverviewChart.style,
+
+    {
+      position:
+        "absolute",
+
+      right:
+        "28px",
+
+      bottom:
+        "28px",
+
+      zIndex:
+        "6",
+
+      width:
+        "330px",
+
+      maxWidth:
+        "calc(100vw - 80px)",
+
+      padding:
+        "12px 13px 10px",
+
+      boxSizing:
+        "border-box",
+
+      border:
+        "1px solid rgba(255,235,160,.10)",
+
+      borderRadius:
+        "8px",
+
+      background:
+        "rgba(2,3,6,.60)",
+
+      backdropFilter:
+        "blur(6px)",
+
+      fontFamily:
+        "Arial, Helvetica, sans-serif",
+
+      color:
+        "#f8f8ff",
+
+      pointerEvents:
+        "none",
+
+      display:
+        "none"
+    }
+  );
+
+
+  stage.appendChild(
+    thunderOverviewChart
+  );
+
+}
+
+
+function updateThunderOverviewChart() {
+
+  ensureThunderOverviewChart();
+
+
+  if (
+    !thunderOverviewChart
+  ) {
+    return;
+  }
+
+
+  const rows =
+    YEARS.map(
+      (
+        year,
+        index
+      ) => {
+
+        const stats =
+          annualStatsByYear.get(
+            year
+          ) || {
+            total:
+              0,
+
+            partial:
+              false
+          };
+
+
+        return {
+          year,
+          index,
+
+          total:
+            stats.total,
+
+          partial:
+            stats.partial
+        };
+
+      }
+    );
+
+
+  const maximum =
+    Math.max(
+      1,
+
+      ...rows.map(
+        row =>
+          row.total
+      )
+    );
+
+
+  const width =
+    306;
+
+  const height =
+    98;
+
+  const left =
+    4;
+
+  const right =
+    4;
+
+  const top =
+    7;
+
+  const bottom =
+    22;
+
+
+  const plotWidth =
+    width -
+    left -
+    right;
+
+
+  const plotHeight =
+    height -
+    top -
+    bottom;
+
+
+  const slot =
+    plotWidth /
+    rows.length;
+
+
+  const barWidth =
+    Math.max(
+      3.0,
+
+      slot *
+        0.46
+    );
+
+
+  /*
+   * Keep the exact original bar-colour logic:
+   *
+   * strongest Years → accent colour
+   * other Years     → base colour
+   *
+   * Only opacity fades vertically.
+   */
+  const gradientDefinitions =
+    rows
+
+      .map(
+        row => {
+
+          const pair =
+            YEAR_COLOUR_PAIRS[
+              row.index
+            ];
+
+
+          const baseColour =
+            thunderColourToCss(
+              pair[0]
+            );
+
+
+          const accentColour =
+            thunderColourToCss(
+              pair[1]
+            );
+
+
+          const ratio =
+            row.total /
+            maximum;
+
+
+          const originalBarColour =
+            ratio >
+              0.72
+
+              ? accentColour
+
+              : baseColour;
+
+
+          const topOpacity =
+            row.partial
+
+              ? 0.45
+
+              : 1.0;
+
+
+          return `
+            <linearGradient
+              id="annual-gradient-${row.year}"
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="1"
+            >
+
+              <stop
+                offset="0%"
+                stop-color="${originalBarColour}"
+                stop-opacity="${topOpacity}"
+              />
+
+              <stop
+                offset="42%"
+                stop-color="${originalBarColour}"
+                stop-opacity="${(
+                  topOpacity *
+                  0.58
+                ).toFixed(3)}"
+              />
+
+              <stop
+                offset="100%"
+                stop-color="${originalBarColour}"
+                stop-opacity="0"
+              />
+
+            </linearGradient>
+          `;
+
+        }
+      )
+
+      .join("");
+
+
+  const bars =
+    rows
+
+      .map(
+        row => {
+
+          const ratio =
+            row.total /
+            maximum;
+
+
+          const barHeight =
+            ratio *
+            plotHeight;
+
+
+          const x =
+            left +
+            row.index *
+              slot +
+            (
+              slot -
+              barWidth
+            ) /
+              2;
+
+
+          const y =
+            top +
+            plotHeight -
+            barHeight;
+
+
+          return `
+            <rect
+              x="${x.toFixed(2)}"
+              y="${y.toFixed(2)}"
+              width="${barWidth.toFixed(2)}"
+              height="${Math.max(
+                0,
+                barHeight
+              ).toFixed(2)}"
+              rx="${Math.min(
+                1.1,
+                barWidth /
+                  3
+              ).toFixed(2)}"
+              fill="url(#annual-gradient-${row.year})"
+              opacity="1"
+            />
+          `;
+
+        }
+      )
+
+      .join("");
+
+
+  /*
+   * Wider invisible hit areas.
+   * Users do not need to hit the thin visible bar precisely.
+   */
+  const hitZones =
+    rows
+
+      .map(
+        row => {
+
+          const x =
+            left +
+            row.index *
+              slot;
+
+
+          return `
+            <rect
+              data-thunder-chart-index="${row.index}"
+              x="${x.toFixed(2)}"
+              y="${top}"
+              width="${slot.toFixed(2)}"
+              height="${plotHeight.toFixed(2)}"
+              fill="transparent"
+              pointer-events="all"
+            />
+          `;
+
+        }
+      )
+
+      .join("");
+
+
+  const yearLabels =
+    rows
+
+      .map(
+        row => {
+
+          const x =
+            left +
+            row.index *
+              slot +
+            slot /
+              2;
+
+
+          const shortYear =
+            String(
+              row.year
+            ).slice(
+              -2
+            );
+
+
+          return `
+            <text
+              x="${x.toFixed(2)}"
+              y="${height - 5}"
+              text-anchor="middle"
+              font-size="5.2"
+              fill="${row.partial
+                ? "rgba(255,225,140,.60)"
+                : "rgba(220,225,240,.36)"}"
+              font-family="Arial, Helvetica, sans-serif"
+            >
+              ${shortYear}${row.partial ? "*" : ""}
+            </text>
+          `;
+
+        }
+      )
+
+      .join("");
+
+
+  const hoverItems =
+    rows.map(
+      row => ({
+
+        kicker:
+          "YEAR",
+
+        title:
+          String(
+            row.year
+          ),
+
+        valueLabel:
+          row.partial
+
+            ? "RECORDED LIGHTNING"
+
+            : "ANNUAL LIGHTNING",
+
+        valueText:
+          formatLightningCount(
+            row.total
+          ),
+
+        note:
+          row.partial
+
+            ? yearCoverageText(
+                row.year
+              )
+
+            : ""
+
+      })
+    );
+
+
+  thunderOverviewChart.innerHTML = `
+    <div style="
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+      margin-bottom:3px;
+    ">
+
+      <div>
+
+        <div style="
+          font-size:8px;
+          letter-spacing:.14em;
+          color:rgba(220,225,240,.44);
+          margin-bottom:3px;
+        ">
+          ANNUAL LIGHTNING
+        </div>
+
+        <div style="
+          font-size:11px;
+          font-weight:600;
+          letter-spacing:.02em;
+          color:rgba(248,248,255,.88);
+        ">
+          2005–2026 YEARLY RHYTHM
+        </div>
+
+      </div>
+
+
+      <div style="
+        font-size:7px;
+        line-height:1.55;
+        letter-spacing:.10em;
+        color:rgba(220,225,240,.34);
+        text-align:right;
+        padding-top:2px;
+      ">
+        MAX RECORDED<br>
+        ${formatLightningCount(
+          maximum
+        )}
+      </div>
+
+    </div>
+
+
+    <svg
+      viewBox="0 0 ${width} ${height}"
+      style="
+        display:block;
+        width:100%;
+        height:auto;
+        overflow:visible;
+      "
+      aria-label="Annual Hong Kong lightning totals 2005 to 2026"
+    >
+
+      <defs>
+        ${gradientDefinitions}
+      </defs>
+
+      <line
+        x1="${left}"
+        y1="${top + plotHeight}"
+        x2="${width - right}"
+        y2="${top + plotHeight}"
+        stroke="rgba(220,225,240,.14)"
+        stroke-width=".65"
+      />
+
+      ${bars}
+
+      ${hitZones}
+
+      ${yearLabels}
+
+    </svg>
+
+
+    <div style="
+      margin-top:1px;
+      font-size:7px;
+      line-height:1.5;
+      letter-spacing:.08em;
+      color:rgba(220,225,240,.36);
+      text-align:right;
+    ">
+      * PARTIAL COVERAGE ·
+      2005 FROM 21 JUN ·
+      2026 THROUGH 31 AUG
+    </div>
+  `;
+
+
+  prepareThunderChartInteraction(
+    thunderOverviewChart,
+    hoverItems
+  );
+
+
+  syncThunderOverviewChartVisibility();
+
+}
+
+
+
+function syncThunderOverviewChartVisibility() {
+
+  if (
+    !thunderOverviewChart
+  ) {
+    return;
+  }
+
+
+  thunderOverviewChart
+    .style
+    .display =
+
+      viewMode ===
+        "overview"
+
+        ? "block"
+
+        : "none";
+
+}
+
+
 
 function attachInteraction() {
 
@@ -12150,6 +13713,9 @@ async function initialisePrototype() {
 
 
   buildYearRhythms();
+
+
+  updateThunderOverviewChart();
 
 
 
