@@ -696,3 +696,16 @@ I also tested several alternatives for the Year-level light, including denser pa
 To reduce visible gaps without making the light blobs too large, I increased the particle density, reduced the random phase offset, raised the minimum brightness, and slightly reduced the point size. This produced a more continuous but still uneven and luminous Year orbit.
 
 The earlier standalone 2025 prototype is still preserved separately as a reference. This iteration confirmed that the next step should be to test multiple complete Year modules gradually rather than expanding all 22 years at once.
+
+
+### Encoding annual lightning intensity across 2020–2026
+
+I expanded the complete Year → Month → Day hierarchy from a single 2025 prototype to seven years of real Hong Kong Observatory lightning data from 2020 to 2026.
+
+Displaying several complete Year modules together made the Month systems visually dominant, so I reduced their scale to 60% of the previous size and slightly lowered the brightness of the Daily rings and halos. This kept the Month and Day structures readable without overwhelming the Year-level composition.
+
+I then mapped each year's total lightning count to the visual appearance of its Year orbit. The chronological radius remains fixed, with earlier years inside and later years outside, while annual lightning intensity controls the orbit's thickness, brightness, and colour. Years with higher total lightning become thicker, brighter, and slightly more violet-white, while lower totals remain thinner, dimmer, and more cyan-blue.
+
+I used a logarithmic normalisation for annual totals so that extreme values would not visually overpower the other years. The strongest year is capped at the previously tested maximum visual intensity. The 2026 module uses only the available partial-year observations rather than extrapolating missing future dates.
+
+This iteration establishes a clearer data hierarchy: radius represents time, the Year orbit represents annual intensity, and the concentric Daily rings represent day-level lightning activity.
